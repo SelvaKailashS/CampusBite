@@ -1,8 +1,5 @@
-import { Router } from "express";
 import { prisma } from "../lib/prisma.js";
-import { requireAuth } from "../lib/auth.js";
-
-const router = Router();
+import { requireAuth, setCors } from "../lib/auth.js";
 
 function makeToken(canteenId) {
   const prefix =
@@ -14,16 +11,14 @@ function makeToken(canteenId) {
   return `${prefix}-${String(Math.floor(10 + Math.random() * 89)).padStart(3, "0")}`;
 }
 
-router.get("/mine", requireAuth, async (req, res) => {
-  const orders = await prisma.order.findMany({
-    where: { userId: req.user.id },
-    include: { items: true, canteen: true },
-    orderBy: { placedAt: "desc" },
-  });
-  res.json({ orders });
-});
+export default async function handler(req, res) {
+  setCors(res);
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
-router.post("/", requireAuth, async (req, res) => {
+  const auth = requireAuth(req, res);
+  if (!auth) return;
+
   try {
     const { canteenId, items, mode, location, payment } = req.body;
     if (!canteenId || !items?.length || !mode || !payment) {
@@ -51,7 +46,7 @@ router.post("/", requireAuth, async (req, res) => {
     const total = orderItems.reduce((s, i) => s + i.price * i.qty, 0);
 
     if (payment === "wallet") {
-      const user = await prisma.user.findUnique({ where: { id: req.user.id } });
+      const user = await prisma.user.findUnique({ where: { id: auth.id } });
       if (user.wallet < total) return res.status(400).json({ error: "Insufficient wallet balance" });
       await prisma.user.update({ where: { id: user.id }, data: { wallet: user.wallet - total } });
     }
@@ -59,7 +54,7 @@ router.post("/", requireAuth, async (req, res) => {
     const order = await prisma.order.create({
       data: {
         token: makeToken(canteenId),
-        userId: req.user.id,
+        userId: auth.id,
         canteenId,
         total,
         mode,
@@ -71,7 +66,7 @@ router.post("/", requireAuth, async (req, res) => {
         paymentStatus: payment === "counter-cash" ? "pending" : "paid",
         stage: 0,
         etaMin: canteen.waitMax + (mode === "delivery" ? 3 : 0),
-        studentName: req.user.name || "Guest",
+        studentName: auth.name || "Guest",
         items: { create: orderItems },
       },
       include: { items: true, canteen: true },
@@ -82,23 +77,4 @@ router.post("/", requireAuth, async (req, res) => {
     console.error("Order error:", e);
     res.status(500).json({ error: "Failed to place order" });
   }
-});
-
-router.get("/:id", requireAuth, async (req, res) => {
-  const order = await prisma.order.findUnique({
-    where: { id: Number(req.params.id) },
-    include: { items: true, canteen: true },
-  });
-  if (!order) return res.status(404).json({ error: "Order not found" });
-
-  if (req.user.role === "student" && order.userId !== req.user.id) {
-    return res.status(403).json({ error: "Not your order" });
-  }
-  if (req.user.role === "admin" && req.user.canteenId && order.canteenId !== req.user.canteenId) {
-    return res.status(403).json({ error: "Order not in your canteen" });
-  }
-
-  res.json({ order });
-});
-
-export default router;
+}

@@ -1,0 +1,5 @@
+{
+  "buildCommand": "prisma generate && prisma db push --skip-generate --accept-data-loss && vite build",
+  "outputDirectory": "dist",
+  "framework": "vite"
+}

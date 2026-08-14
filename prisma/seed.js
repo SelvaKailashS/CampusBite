@@ -49,31 +49,18 @@ const foods = [
 ];
 
 async function main() {
-  console.log("Seeding CampusBite database...\n");
-
+  console.log("Seeding CampusBite database...");
   for (const c of canteens) {
     await prisma.canteen.upsert({ where: { id: c.id }, update: c, create: c });
-    console.log(`  Canteen: ${c.emoji} ${c.name}`);
+    console.log("Canteen:", c.name);
   }
-
   for (const f of foods) {
     await prisma.food.upsert({ where: { slug: f.slug }, update: f, create: f });
   }
-  console.log(`\n  Seeded ${foods.length} food items`);
-
-  const canteenCount = await prisma.canteen.count();
-  const foodCount = await prisma.food.count();
-
-  console.log(`\nDone! Database now has:`);
-  console.log(`   ${canteenCount} canteens`);
-  console.log(`   ${foodCount} food items\n`);
+  console.log(`Seeded ${foods.length} food items`);
+  console.log("Done!");
 }
 
 main()
-  .catch((e) => {
-    console.error("Seed failed:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+  .catch((e) => { console.error(e); process.exit(1); })
+  .finally(async () => { await prisma.$disconnect(); });
