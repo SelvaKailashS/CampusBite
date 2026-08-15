@@ -60,6 +60,30 @@ export default function App() {
   const [dataVersion, setDataVersion] = useState(0);
   const bumpData = () => setDataVersion((v) => v + 1);
   void dataVersion;
+
+  // Session restore — if there's a saved JWT, ask the backend who I am
+  useEffect(() => {
+    const token = localStorage.getItem("campusbite_token");
+    if (!token) return;
+    fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setUser({
+            name: data.user.name || "",
+            email: data.user.email,
+            dept: data.user.dept || "",
+            year: data.user.year || "",
+            role: data.user.role === "super_admin" ? "admin" : data.user.role,
+            canteenId: data.user.canteenId || undefined,
+          });
+        } else {
+          localStorage.removeItem("campusbite_token");
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [selectedCanteenId, setSelectedCanteenId] = useState<string>("spicy");
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartCanteenId, setCartCanteenId] = useState<string | null>(null);
@@ -166,14 +190,84 @@ export default function App() {
     pushToast(`Switched to ${canteens.find((c) => c.id === food.canteenId)?.name}`, "info");
   };
 
-  const placeOrder = (payment: PaymentMode) => {
+  const placeOrder = async (payment: PaymentMode) => {
     if (cart.length === 0) return;
     const canteen = canteens.find((c) => c.id === cartCanteenId)!;
     const total = subtotal;
     if (payment === "wallet") {
       if (walletBalance < total) { pushToast("Insufficient wallet balance.", "warn"); return; }
-      setWalletBalance((b) => b - total);
     }
+
+    // Try to save to REAL backend (Neon database)
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        // Foods in DB have numeric ids; our local foods have string slugs like "sp-cfr"
+        // The seed script uses those slugs, so we fetch numeric ids from the API first
+        const foodsRes = await fetch(`/api/foods?canteenId=${canteen.id}`);
+        const foodsData = await foodsRes.json();
+        const slugToId = new Map((foodsData.foods || []).map((f: any) => [f.slug, f.id]));
+
+        const items = cartItems
+          .map((i) => ({ foodId: slugToId.get(i.foodId), qty: i.qty }))
+          .filter((i) => i.foodId != null);
+
+        if (items.length === 0) throw new Error("No matching foods in DB — did you seed?");
+
+        const res = await fetch("/api/orders", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            canteenId: canteen.id,
+            items,
+            mode: orderMode,
+            location: orderMode === "delivery" ? location : undefined,
+            payment,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Order failed");
+
+        // Success — use the order returned by the backend
+        const dbOrder = data.order;
+        const order: Order = {
+          id: `CB${dbOrder.id}`,
+          token: dbOrder.token,
+          canteenId: dbOrder.canteenId,
+          items: dbOrder.items.map((i: any) => ({
+            foodId: String(i.foodId), qty: i.qty, name: i.name, price: i.price, emoji: i.emoji,
+          })),
+          total: dbOrder.total,
+          mode: dbOrder.mode,
+          location: dbOrder.block
+            ? { block: dbOrder.block, room: dbOrder.room, row: dbOrder.rowNum, desk: dbOrder.desk }
+            : undefined,
+          placedAt: new Date(dbOrder.placedAt).getTime(),
+          etaMin: dbOrder.etaMin,
+          stage: dbOrder.stage,
+          student: dbOrder.studentName || user?.name || "Guest",
+          payment: dbOrder.payment,
+          paymentStatus: dbOrder.paymentStatus,
+        };
+        if (payment === "wallet") setWalletBalance((b) => b - total);
+        setOrders((o) => [order, ...o]);
+        setCart([]);
+        setCartCanteenId(null);
+        setCartOpen(false);
+        setCheckoutOpen(false);
+        setTrackingOrderId(order.id);
+        pushToast(`Token ${order.token} saved to database · ETA ${order.etaMin} min`);
+        return;
+      } catch (e: any) {
+        pushToast(`API error: ${e.message}. Saving locally.`, "warn");
+      }
+    }
+
+    // Fallback: local-only (guest mode or no token)
+    if (payment === "wallet") setWalletBalance((b) => b - total);
     const order: Order = {
       id: `CB${Math.floor(1000 + Math.random() * 9000)}`,
       token: makeToken(canteen.id),
@@ -355,7 +449,7 @@ export default function App() {
               </div>
             )}
             {/* Profile chip */}
-            <ProfileMenu user={user} onLogout={() => { setUser(null); setCart([]); setCartCanteenId(null); setOrders([]); setView("home"); }} />
+            <ProfileMenu user={user} onLogout={() => { localStorage.removeItem("campusbite_token"); setUser(null); setCart([]); setCartCanteenId(null); setOrders([]); setView("home"); }} />
 
             {!isAdmin && (
             <button
@@ -2032,51 +2126,56 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
   const [error, setError] = useState("");
   const [adminScope, setAdminScope] = useState<string>("spicy"); // canteenId or "all"
 
-  const CANTEEN_ADMIN_PASSCODE = "niet2006";
-  const SUPER_ADMIN_PASSCODE = "pkdas";
-
-  const submit = () => {
+  const submit = async () => {
     setError("");
     if (!email.trim() || !password.trim()) { setError("Please enter your email and password."); return; }
     if (!/^\S+@\S+\.\S+$/.test(email)) { setError("Please enter a valid email address."); return; }
     if (password.length < 4) { setError("Password must be at least 4 characters."); return; }
-
-    // 🔒 Admin gate — different passcodes for canteen admins vs super admin
-    if (role === "admin") {
-      const isSuper = adminScope === "all";
-      const expected = isSuper ? SUPER_ADMIN_PASSCODE : CANTEEN_ADMIN_PASSCODE;
-      if (password !== expected) {
-        setError(
-          isSuper
-            ? "Incorrect Super Admin passcode. This is restricted to college leadership."
-            : "Incorrect canteen admin passcode. Contact your canteen manager if you need access."
-        );
-        return;
-      }
-    }
 
     if (mode === "register") {
       if (role === "admin") { setError("Admin accounts are pre-provisioned. Use Sign in instead."); return; }
       if (password !== confirmPw) { setError("Passwords don't match. Try again."); return; }
       if (!agree) { setError("Please accept the Terms & Food Hygiene Policy to register."); return; }
     }
+
     setLoading(true);
-    setTimeout(() => {
+    try {
+      // Call REAL backend API — saves to Neon database
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          password,
+          role,
+          canteenId: role === "admin" && adminScope !== "all" ? adminScope : undefined,
+          mode,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setLoading(false);
+        setError(data.error || "Login failed");
+        return;
+      }
+      // Save JWT token so session persists across refreshes
+      localStorage.setItem("campusbite_token", data.token);
       setLoading(false);
       onLogin({
-        name: "",
-        email: email.trim(),
-        dept: "",
-        year: "",
-        role,
-        canteenId: role === "admin" && adminScope !== "all" ? adminScope : undefined,
+        name: data.user.name || "",
+        email: data.user.email,
+        dept: data.user.dept || "",
+        year: data.user.year || "",
+        role: data.user.role === "super_admin" ? "admin" : data.user.role,
+        canteenId: data.user.canteenId || undefined,
       });
-    }, 900);
+    } catch (e: any) {
+      setLoading(false);
+      setError("Network error. Please try again.");
+    }
   };
 
-  const guestLogin = () => {
-    onLogin({ name: "Guest Student", email: "guest@campusbite.app", dept: "—", year: "—", role: "student" });
-  };
+
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -2409,29 +2508,9 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
             </div>
 
             <div className="grid gap-2">
-              {role === "student" ? (
-                <>
-                  <button
-                    onClick={guestLogin}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-stone-200 bg-white py-3 text-sm font-bold text-stone-700 transition hover:border-[#14532D] hover:text-[#14532D]"
-                  >
-                    👀 Continue as guest
-                  </button>
-                  <button
-                    onClick={() => onLogin({ name: "", email: "aditi@example.com", dept: "", year: "", role: "student" })}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#FCECC5] py-3 text-sm font-bold text-[#0B1F16] transition hover:bg-[#F5DE97]"
-                  >
-                    ⚡ Demo student login
-                  </button>
-                </>
-              ) : (
-                <button
-                  onClick={() => onLogin({ name: "", email: "admin@example.com", dept: "", year: "", role: "admin", canteenId: adminScope === "all" ? undefined : adminScope })}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#0B1F16] py-3 text-sm font-bold text-[#FCECC5] transition hover:bg-[#14532D]"
-                >
-                  ⚡ Demo login as {adminScope === "all" ? "Super Admin" : canteens.find((c) => c.id === adminScope)?.name + " admin"}
-                </button>
-              )}
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[11px] font-semibold text-amber-900">
+                🔐 Registration & login save to the real database. Use the form above.
+              </div>
             </div>
 
             <p className="mt-6 text-center text-[11px] text-stone-500">
@@ -2470,15 +2549,31 @@ function OnboardingScreen({
     setStep(1);
   };
 
-  const finish = () => {
+  const finish = async () => {
     setLoading(true);
-    setTimeout(() => {
-      onDone({
-        name: name.trim(),
-        dept: role === "admin" ? "Admin" : dept,
-        year: role === "admin" ? "Staff" : year,
-      });
-    }, 500);
+    const profile = {
+      name: name.trim(),
+      dept: role === "admin" ? "Admin" : dept,
+      year: role === "admin" ? "Staff" : year,
+    };
+    // Save profile to Neon database via API
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        await fetch("/api/auth/me", {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(profile),
+        });
+      } catch (e) {
+        // Silent — profile will still work locally
+      }
+    }
+    setLoading(false);
+    onDone(profile);
   };
 
   return (
