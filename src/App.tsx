@@ -61,6 +61,16 @@ export default function App() {
   const bumpData = () => setDataVersion((v) => v + 1);
   void dataVersion;
 
+  const [dbConnected, setDbConnected] = useState<boolean | null>(null);
+
+  // Database health check
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((d) => setDbConnected(!!d?.ok))
+      .catch(() => setDbConnected(false));
+  }, []);
+
   // Session restore — if there's a saved JWT, ask the backend who I am
   useEffect(() => {
     const token = localStorage.getItem("campusbite_token");
@@ -77,6 +87,9 @@ export default function App() {
             role: data.user.role === "super_admin" ? "admin" : data.user.role,
             canteenId: data.user.canteenId || undefined,
           });
+          if (typeof data.user.wallet === "number") {
+            setWalletBalance(data.user.wallet);
+          }
         } else {
           localStorage.removeItem("campusbite_token");
         }
@@ -344,6 +357,12 @@ export default function App() {
                 </span>
                 Live
               </span>
+              {dbConnected !== null && (
+                <span className={"inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-mono text-[10px] font-semibold " + (dbConnected ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30" : "bg-amber-500/20 text-amber-300 border border-amber-500/30")}>
+                  <span className={"h-1.5 w-1.5 rounded-full " + (dbConnected ? "bg-emerald-400" : "bg-amber-400")} />
+                  {dbConnected ? "Neon DB Connected" : "Local Mode"}
+                </span>
+              )}
               
           {canteens.map((c, idx) => (
             <span key={c.id} className="flex items-center gap-2">
