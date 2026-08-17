@@ -114,8 +114,23 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [mobileMenu, setMobileMenu] = useState(false);
+  const [topUpOpen, setTopUpOpen] = useState(false);
   const [walletBalance, setWalletBalance] = useState(450);
+
+  const handleTopUp = async (amount: number) => {
+    setWalletBalance((b) => b + amount);
+    pushToast(`₹${amount} added to Campus Wallet!`);
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        await fetch("/api/auth/me", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ topUpAmount: amount }),
+        });
+      } catch {}
+    }
+  };
 
   const selectedCanteen = canteens.find((c) => c.id === selectedCanteenId)!;
   const cartCanteen = (cartCanteenId ? canteens.find((c) => c.id === cartCanteenId) : null) ?? null;
@@ -461,10 +476,16 @@ export default function App() {
                   </div>
                 </div>
                 <div className="h-8 w-px bg-stone-900/10" />
-                <div className="text-right">
-                  <div className="text-[9px] uppercase tracking-[0.15em] text-stone-500">Wallet</div>
-                  <div className="font-mono text-sm font-semibold">₹{walletBalance}</div>
-                </div>
+                <button
+                  onClick={() => setTopUpOpen(true)}
+                  className="group flex flex-col items-end rounded-xl px-2 py-0.5 transition hover:bg-stone-900/5 cursor-pointer text-right"
+                  title="Click to Top Up Wallet"
+                >
+                  <div className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#14532D] group-hover:underline">
+                    Wallet 💳 +
+                  </div>
+                  <div className="font-mono text-sm font-semibold text-stone-900">₹{walletBalance}</div>
+                </button>
               </div>
             )}
             {/* Profile chip */}
@@ -1104,6 +1125,13 @@ export default function App() {
       {conciergeOpen && (
         <AIConcierge canteen={selectedCanteen} allFoods={foods} onClose={() => setConciergeOpen(false)} onAdd={(f) => addToCart(f)} />
       )}
+
+      <WalletTopUpModal
+        open={topUpOpen}
+        onClose={() => setTopUpOpen(false)}
+        balance={walletBalance}
+        onTopUp={handleTopUp}
+      />
 
 
 
@@ -2863,36 +2891,98 @@ function AdminDashboard({
   }));
   const topDishes = Object.values(dishTally).sort((a, b) => b.qty - a.qty).slice(0, 5);
 
-  const setCanteenStatus = (id: string, status: Canteen["status"]) => {
+  const setCanteenStatus = async (id: string, status: Canteen["status"]) => {
     const c = canteens.find((x) => x.id === id);
     if (c) { c.status = status; bumpData(); pushToast(`${c.name} set to ${status.toUpperCase()}`, "info"); }
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        await fetch("/api/canteens", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ id, status }),
+        });
+      } catch {}
+    }
   };
 
-  const updateFoodPrice = (id: string, price: number) => {
+  const updateFoodPrice = async (id: string, price: number) => {
     const f = foods.find((x) => x.id === id);
     if (f) { f.price = price; bumpData(); }
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        const numId = Number(id);
+        if (!isNaN(numId)) {
+          await fetch(`/api/foods/${numId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ price }),
+          });
+        }
+      } catch {}
+    }
   };
 
-  const togglePopular = (id: string) => {
+  const togglePopular = async (id: string) => {
     const f = foods.find((x) => x.id === id);
-    if (f) { f.popular = !f.popular; bumpData(); pushToast(`${f.name} ${f.popular ? "marked signature" : "unmarked"}`, "info"); }
+    if (f) {
+      f.popular = !f.popular;
+      bumpData();
+      pushToast(`${f.name} ${f.popular ? "marked signature" : "unmarked"}`, "info");
+      const token = localStorage.getItem("campusbite_token");
+      if (token) {
+        try {
+          const numId = Number(id);
+          if (!isNaN(numId)) {
+            await fetch(`/api/foods/${numId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ popular: f.popular }),
+            });
+          }
+        } catch {}
+      }
+    }
   };
 
-  const removeFood = (id: string) => {
+  const removeFood = async (id: string) => {
     const idx = foods.findIndex((x) => x.id === id);
     if (idx >= 0) {
       const f = foods[idx];
       foods.splice(idx, 1);
       bumpData();
       pushToast(`Removed ${f.name}`, "warn");
+      const token = localStorage.getItem("campusbite_token");
+      if (token) {
+        try {
+          const numId = Number(id);
+          if (!isNaN(numId)) {
+            await fetch(`/api/foods/${numId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
+        } catch {}
+      }
     }
   };
 
-  const addFood = (f: Omit<FoodItem, "id">) => {
+  const addFood = async (f: Omit<FoodItem, "id">) => {
     const id = `${f.canteenId.slice(0, 2)}-${Math.random().toString(36).slice(2, 6)}`;
     foods.push({ ...f, id });
     bumpData();
     pushToast(`Added ${f.name}`);
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        await fetch("/api/foods", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(f),
+        });
+      } catch {}
+    }
   };
 
   const menuFoods = menuFilter === "all" ? foods : foods.filter((f) => f.canteenId === menuFilter);
@@ -3705,5 +3795,130 @@ function KitchenPortal({ orders, setOrders, pushToast, user }: { orders: Order[]
         )}
       </div>
     </main>
+  );
+}
+
+function WalletTopUpModal({
+  open,
+  onClose,
+  balance,
+  onTopUp,
+}: {
+  open: boolean;
+  onClose: () => void;
+  balance: number;
+  onTopUp: (amount: number) => Promise<void>;
+}) {
+  const [amount, setAmount] = useState(200);
+  const [custom, setCustom] = useState("");
+  const [method, setMethod] = useState<"upi" | "card" | "netbanking">("upi");
+  const [loading, setLoading] = useState(false);
+
+  if (!open) return null;
+
+  const finalAmount = custom ? Number(custom) || 0 : amount;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (finalAmount <= 0) return;
+    setLoading(true);
+    await onTopUp(finalAmount);
+    setLoading(false);
+    onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-md overflow-hidden rounded-[28px] bg-white p-6 shadow-2xl border border-stone-100">
+        <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+          <div>
+            <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#14532D]">Campus Wallet</div>
+            <h3 className="text-xl font-bold text-stone-900">Add Funds</h3>
+          </div>
+          <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-100 text-stone-500 hover:bg-stone-200">
+            ✕
+          </button>
+        </div>
+
+        <div className="mt-4 rounded-2xl bg-gradient-to-r from-[#0B1F16] to-[#14532D] p-4 text-white">
+          <div className="text-[10px] uppercase tracking-widest text-lime-300">Current Balance</div>
+          <div className="text-3xl font-extrabold font-mono">₹{balance}</div>
+        </div>
+
+        <form onSubmit={handleSubmit} className="mt-5 space-y-4">
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-2">Select Amount</label>
+            <div className="grid grid-cols-4 gap-2">
+              {[100, 200, 500, 1000].map((val) => (
+                <button
+                  type="button"
+                  key={val}
+                  onClick={() => { setAmount(val); setCustom(""); }}
+                  className={`rounded-xl border py-2.5 text-sm font-bold transition ${
+                    !custom && amount === val
+                      ? "border-[#14532D] bg-[#E7EEE7] text-[#14532D]"
+                      : "border-stone-200 bg-white text-stone-700 hover:border-stone-400"
+                  }`}
+                >
+                  +₹{val}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="Or enter custom amount (e.g. 350)"
+              className="mt-2.5 w-full rounded-xl border border-stone-200 bg-stone-50 px-3.5 py-2 text-sm font-semibold outline-none focus:border-[#14532D] focus:bg-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-bold uppercase tracking-wider text-stone-500 mb-2">Payment Method</label>
+            <div className="space-y-2">
+              {[
+                { key: "upi", name: "Instant UPI (GPay, PhonePe, Paytm)", icon: "📱" },
+                { key: "card", name: "Debit / Credit Card", icon: "💳" },
+                { key: "netbanking", name: "Net Banking", icon: "🏦" },
+              ].map((m) => (
+                <button
+                  type="button"
+                  key={m.key}
+                  onClick={() => setMethod(m.key as any)}
+                  className={`flex w-full items-center justify-between rounded-xl border p-3 text-left transition ${
+                    method === m.key ? "border-[#14532D] bg-[#E7EEE7]/60" : "border-stone-200 hover:bg-stone-50"
+                  }`}
+                >
+                  <span className="flex items-center gap-2.5 text-xs font-bold text-stone-800">
+                    <span>{m.icon}</span> {m.name}
+                  </span>
+                  <span className={`h-4 w-4 rounded-full border ${method === m.key ? "border-4 border-[#14532D] bg-white" : "border-stone-300"}`} />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {method === "upi" && (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm text-xl font-bold border border-emerald-200">
+                📲
+              </div>
+              <div className="text-[11px] text-emerald-900">
+                <span className="font-bold">Instant Credit to Neon DB</span>
+                <p className="text-emerald-700">Simulated UPI gateway for NIET campus wallet.</p>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading || finalAmount <= 0}
+            className="w-full rounded-full bg-[#0B1F16] py-3.5 text-sm font-bold text-white shadow-lg transition hover:bg-[#14532D] disabled:opacity-50"
+          >
+            {loading ? "Processing Top-up..." : `Pay ₹${finalAmount} & Add to Wallet →`}
+          </button>
+        </form>
+      </div>
+    </div>
   );
 }

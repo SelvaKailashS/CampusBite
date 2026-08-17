@@ -16,14 +16,17 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "PATCH") {
-      const { name, dept, year } = req.body;
+      const { name, dept, year, topUpAmount } = req.body;
+      const dataToUpdate = {};
+      if (name !== undefined) dataToUpdate.name = name;
+      if (dept !== undefined) dataToUpdate.dept = dept;
+      if (year !== undefined) dataToUpdate.year = year;
+      if (typeof topUpAmount === "number" && topUpAmount > 0) {
+        dataToUpdate.wallet = { increment: topUpAmount };
+      }
       const user = await prisma.user.update({
         where: { id: auth.id },
-        data: {
-          ...(name !== undefined && { name }),
-          ...(dept !== undefined && { dept }),
-          ...(year !== undefined && { year }),
-        },
+        data: dataToUpdate,
       });
       return res.json({ user: sanitizeUser(user), token: signToken(user) });
     }
