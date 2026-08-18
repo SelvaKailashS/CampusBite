@@ -1981,13 +1981,45 @@ function OrderTrackerModal({ order, canteen, onClose }: { order: Order; canteen:
               {order.mode === "pickup" ? "Pickup" : "Delivery"}
             </span>
             <span className={"rounded-full border px-2.5 py-1 font-bold uppercase tracking-widest " + (order.paymentStatus === "paid" ? "border-lime-400/40 bg-lime-500/20 text-lime-200" : "border-amber-400/40 bg-amber-500/20 text-amber-200")}>
-              {order.paymentStatus === "paid" ? "✓ Paid" : "Pay at Counter"}
+              {order.paymentStatus === "paid" ? "✓ Paid Online" : "⚠️ Pay at Counter"}
             </span>
             <span className="rounded-full border border-white/25 bg-white/10 px-2.5 py-1 font-mono font-bold">₹{order.total}</span>
           </div>
         </div>
 
-        <div className="overflow-auto p-5">
+        <div className="overflow-auto p-5 space-y-4">
+          {/* Payment Status Banner */}
+          {order.paymentStatus === "paid" ? (
+            <div className="flex items-center justify-between rounded-2xl bg-emerald-100 p-3.5 border border-emerald-300 text-emerald-950 font-bold text-xs">
+              <span className="flex items-center gap-2">
+                <span className="text-base">🟢</span>
+                <span>PAYMENT RECEIVED ({order.payment.toUpperCase()})</span>
+              </span>
+              <span className="font-mono font-black text-emerald-800">✓ PAID ₹{order.total}</span>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-2xl bg-amber-100 p-3.5 border border-amber-300 text-amber-950 font-bold text-xs">
+              <span className="flex items-center gap-2">
+                <span className="text-base">⚠️</span>
+                <span>PAY AT CANTEEN COUNTER</span>
+              </span>
+              <span className="font-mono font-black text-rose-700">NOT PAID (₹{order.total})</span>
+            </div>
+          )}
+
+          {/* Token QR Code Card */}
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 border border-stone-200 shadow-sm text-center">
+            <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">Show QR Code to Canteen Staff</div>
+            <div className="mt-2 h-36 w-36 overflow-hidden rounded-2xl border-2 border-[#14532D] bg-white p-1.5 shadow-md">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.token)}`}
+                alt={`Token ${order.token}`}
+                className="h-full w-full object-contain"
+              />
+            </div>
+            <div className="mt-2 font-mono text-xs font-black text-stone-800">TOKEN: {order.token}</div>
+          </div>
+
           {!done ? (
             <div className="rounded-2xl bg-[#FCECC5] p-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-amber-800">Estimated time</div>
@@ -4152,11 +4184,101 @@ function EditFoodModal({ food, onClose, onSave }: {
   );
 }
 
+function QRScannerModal({
+  orders,
+  onCollectOrder,
+  onClose,
+}: {
+  orders: Order[];
+  onCollectOrder: (orderId: string) => void;
+  onClose: () => void;
+}) {
+  const [tokenInput, setTokenInput] = useState("");
+  const [scanResult, setScanResult] = useState<{ success: boolean; order?: Order; msg: string } | null>(null);
+
+  const handleVerify = (query: string) => {
+    const q = query.trim().toUpperCase();
+    if (!q) return;
+    const match = orders.find((o) => o.token.toUpperCase() === q || o.id.toUpperCase() === q);
+    if (match) {
+      onCollectOrder(match.id);
+      playReadyChime();
+      setScanResult({
+        success: true,
+        order: match,
+        msg: `Token ${match.token} Verified! Order marked as COLLECTED 🎉`,
+      });
+    } else {
+      setScanResult({
+        success: false,
+        msg: `No active order found matching "${q}".`,
+      });
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} title="📷 Counter Token QR Scanner">
+      <div className="space-y-4">
+        {/* Animated Scanner Viewport */}
+        <div className="relative overflow-hidden rounded-3xl bg-[#0B1F16] p-6 text-center text-white shadow-inner">
+          <div className="mx-auto relative flex h-44 w-44 items-center justify-center rounded-2xl border-2 border-dashed border-lime-400/60 bg-black/40">
+            <div className="pointer-events-none absolute inset-0 animate-pulse bg-lime-400/10" />
+            <div className="h-0.5 w-full bg-lime-400 shadow-[0_0_15px_#a3e635] animate-bounce" />
+            <span className="text-4xl">📷</span>
+          </div>
+          <div className="mt-3 text-xs font-bold text-lime-200">Scan Student QR Code or Enter Token Below</div>
+        </div>
+
+        {/* Manual Token Lookup Fallback */}
+        <div className="space-y-2">
+          <label className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">Verify Token Number</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={tokenInput}
+              onChange={(e) => setTokenInput(e.target.value)}
+              placeholder="e.g. S-104 or CB1001"
+              className="flex-1 rounded-xl border border-stone-200 px-4 py-3 font-mono text-sm font-bold uppercase outline-none focus:border-[#14532D]"
+              onKeyDown={(e) => { if (e.key === "Enter") handleVerify(tokenInput); }}
+            />
+            <button
+              onClick={() => handleVerify(tokenInput)}
+              className="rounded-xl bg-[#14532D] px-5 py-3 text-xs font-extrabold text-white shadow-md hover:bg-[#0F3E22] transition cursor-pointer"
+            >
+              Verify ✓
+            </button>
+          </div>
+        </div>
+
+        {scanResult && (
+          <div className={"rounded-2xl p-4 text-xs font-bold transition " + (scanResult.success ? "bg-emerald-100 text-emerald-900 border border-emerald-300" : "bg-rose-100 text-rose-900 border border-rose-300")}>
+            <div className="text-sm font-extrabold">{scanResult.success ? "✅ Token Verified!" : "❌ Not Found"}</div>
+            <div className="mt-1">{scanResult.msg}</div>
+            {scanResult.order && (
+              <div className="mt-2 text-[11px] font-semibold border-t border-emerald-200 pt-2">
+                Student: {scanResult.order.student} · Items: {scanResult.order.items.map((i) => i.name).join(", ")} · Status: {scanResult.order.paymentStatus === "paid" ? "Paid ✓" : "Pay at counter"}
+              </div>
+            )}
+          </div>
+        )}
+
+        <button
+          onClick={onClose}
+          className="w-full rounded-full border border-stone-200 py-3 text-xs font-extrabold text-stone-700 hover:bg-stone-100 transition cursor-pointer"
+        >
+          Close Scanner
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 function KitchenPortal({ orders, setOrders, pushToast, user }: { orders: Order[]; setOrders: React.Dispatch<React.SetStateAction<Order[]>>; pushToast: (m: string, k?: Toast["kind"]) => void; user?: User }) {
   // Scope: if user is a canteen admin, lock the portal to their canteen only
   const scopedCanteenId = user?.role === "admin" ? user.canteenId : undefined;
   const visibleCanteens = scopedCanteenId ? canteens.filter((c) => c.id === scopedCanteenId) : canteens;
   const [tab, setTab] = useState<string>(scopedCanteenId ?? canteens[0].id);
+  const [showScanner, setShowScanner] = useState(false);
   const current = canteens.find((c) => c.id === tab)!;
   const canteenOrders = orders.filter((o) => o.canteenId === tab);
 
@@ -4173,21 +4295,47 @@ function KitchenPortal({ orders, setOrders, pushToast, user }: { orders: Order[]
     pushToast("Order status updated 🔔", "info");
   };
 
+  const markCollected = (id: string) => {
+    setOrders((prev) => prev.map((o) => {
+      if (o.id !== id) return o;
+      const max = o.mode === "pickup" ? pickupStages.length - 1 : orderStages.length - 1;
+      return { ...o, stage: max };
+    }));
+    pushToast("Token collected 🎉", "success");
+  };
+
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-10">
       <div className="relative overflow-hidden rounded-[32px] bg-[#14532D] p-8 text-white shadow-2xl lg:p-10">
         <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-lime-400/20 blur-3xl" />
         <div className="pointer-events-none absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-[#FCECC5]/20 blur-3xl" />
-        <div className="relative">
-          <div className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-lime-200">
-            Kitchen portal · Live
+        <div className="relative flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-lime-200">
+              Kitchen portal · Live
+            </div>
+            <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
+              Manage incoming <span className="font-display italic text-[#FCECC5]">orders.</span>
+            </h2>
+            <p className="mt-2 text-sm text-white/70">Switch canteens &amp; advance orders through the pipeline.</p>
           </div>
-          <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
-            Manage incoming <span className="font-display italic text-[#FCECC5]">orders.</span>
-          </h2>
-          <p className="mt-2 text-sm text-white/70">Switch canteens & advance orders through the pipeline.</p>
+
+          <button
+            onClick={() => setShowScanner(true)}
+            className="inline-flex items-center gap-2 rounded-full bg-[#0B1F16] px-5 py-3 text-xs font-black text-[#FCECC5] shadow-xl hover:bg-black transition cursor-pointer border border-white/20"
+          >
+            📷 Scan Token QR Code
+          </button>
         </div>
       </div>
+
+      {showScanner && (
+        <QRScannerModal
+          orders={orders}
+          onCollectOrder={markCollected}
+          onClose={() => setShowScanner(false)}
+        />
+      )}
 
       <div className="mt-6 flex flex-wrap items-center gap-2">
         {visibleCanteens.map((c) => (
