@@ -202,7 +202,67 @@ export default function App() {
   const [filter, setFilter] = useState<FilterKey>("All");
   const [healthFilter, setHealthFilter] = useState<HealthTag>("all");
   const [pendingSwitch, setPendingSwitch] = useState<{ food: FoodItem } | null>(null);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem("campusbite_orders");
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Save orders to localStorage whenever orders list changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("campusbite_orders", JSON.stringify(orders));
+    } catch (e) {
+      console.error("Failed to save orders to localStorage", e);
+    }
+  }, [orders]);
+
+  // Sync orders from DB API when user logs in / restores session
+  useEffect(() => {
+    const token = localStorage.getItem("campusbite_token");
+    if (!token) return;
+    fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.orders && Array.isArray(data.orders)) {
+          const fetchedOrders: Order[] = data.orders.map((o: any) => ({
+            id: `CB${o.id}`,
+            token: o.token,
+            canteenId: o.canteenId,
+            items: (o.items || []).map((i: any) => ({
+              foodId: String(i.foodId),
+              qty: i.qty,
+              name: i.name || "Food Item",
+              price: i.price || 0,
+              emoji: i.emoji || "🍽",
+            })),
+            total: o.total,
+            mode: o.mode || "pickup",
+            location: o.block
+              ? { block: o.block, room: o.room, row: o.rowNum, desk: o.desk }
+              : undefined,
+            placedAt: new Date(o.placedAt).getTime(),
+            etaMin: o.etaMin || 15,
+            stage: o.stage || 0,
+            student: o.studentName || "Student",
+            payment: o.payment || "online-upi",
+            paymentStatus: o.paymentStatus || "paid",
+            scheduledTime: o.scheduledTime,
+          }));
+
+          setOrders((prev) => {
+            const existingIds = new Set(prev.map((o) => o.id));
+            const newFetched = fetchedOrders.filter((o) => !existingIds.has(o.id));
+            return [...newFetched, ...prev];
+          });
+        }
+      })
+      .catch(() => {});
+  }, [user]);
+
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -1645,9 +1705,16 @@ function Checkout({
   const [scheduledTime, setScheduledTime] = useState<string>("ASAP");
   const [processing, setProcessing] = useState(false);
 
-  const submit = () => {
+  const submit = async () => {
+    if (processing) return;
     setProcessing(true);
-    setTimeout(() => { setProcessing(false); onPay(payment, scheduledTime !== "ASAP" ? scheduledTime : undefined); }, payment === "counter-cash" ? 400 : 1200);
+    try {
+      await onPay(payment, scheduledTime !== "ASAP" ? scheduledTime : undefined);
+    } catch (err: any) {
+      console.error("Order submission failed:", err);
+    } finally {
+      setProcessing(false);
+    }
   };
 
   const online = paymentOptions.filter((p) => p.kind === "online");
@@ -1838,9 +1905,10 @@ function Checkout({
             )}
 
             <button
+              type="button"
               onClick={submit}
               disabled={processing}
-              className="group mt-5 flex w-full items-center justify-center gap-2.5 rounded-full bg-[#0B1F16] py-4 text-sm font-bold text-white shadow-lg transition hover:bg-[#14532D] hover:scale-[1.01] disabled:opacity-70"
+              className="group mt-5 flex w-full items-center justify-center gap-2.5 rounded-full bg-[#0B1F16] py-4 text-sm font-bold text-white shadow-lg transition hover:bg-[#14532D] hover:scale-[1.01] disabled:opacity-70 cursor-pointer"
             >
               {processing ? (
                 <>
