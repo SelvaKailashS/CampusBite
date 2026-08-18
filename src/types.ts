@@ -49,6 +49,7 @@ export interface FoodItem {
   healthTags?: HealthTag[];
   bg: string;
   image?: string;
+  soldOut?: boolean;
 }
 
 export interface CartItem {

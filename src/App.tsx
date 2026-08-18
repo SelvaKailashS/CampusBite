@@ -444,6 +444,10 @@ export default function App() {
   const subtotal = cartItems.reduce((s, i) => s + (i.food?.price || 0) * i.qty, 0);
 
   const addToCart = (food: FoodItem) => {
+    if (food.soldOut) {
+      pushToast(`Sorry, ${food.name} is currently Sold Out 🚫`, "warn");
+      return;
+    }
     if (cart.length > 0 && cartCanteenId && cartCanteenId !== food.canteenId) {
       setPendingSwitch({ food });
       return;
@@ -1663,8 +1667,17 @@ function CanteenCard({ canteen, selected, onSelect, orders = [] }: { canteen: Ca
 
 function FoodCard({ food, qty, onAdd, onInc, onDec }: { food: FoodItem; qty: number; onAdd: () => void; onInc: () => void; onDec: () => void; }) {
   return (
-    <div className="group flex flex-col overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-900/5 transition hover:-translate-y-1 hover:shadow-xl">
+    <div className={"group flex flex-col overflow-hidden rounded-3xl transition hover:-translate-y-1 hover:shadow-xl " + (food.soldOut ? "bg-stone-50/80 ring-1 ring-stone-200 opacity-90" : "bg-white shadow-sm ring-1 ring-stone-900/5")}>
       <div className={"relative h-44 w-full overflow-hidden " + (food.image ? "bg-stone-100" : food.bg)}>
+        {food.soldOut && (
+          <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/65 backdrop-blur-[2px]">
+            <span className="rounded-full bg-rose-600 px-3.5 py-1 text-[11px] font-black uppercase tracking-widest text-white shadow-lg border border-white/20 animate-pulse">
+              🚫 SOLD OUT
+            </span>
+            <span className="mt-1.5 text-[10px] font-bold text-white/80">Out of Stock Today</span>
+          </div>
+        )}
+
         {food.image ? (
           <img
             src={food.image}
@@ -1701,7 +1714,7 @@ function FoodCard({ food, qty, onAdd, onInc, onDec }: { food: FoodItem; qty: num
         </span>
       </div>
       <div className="flex flex-1 flex-col p-5">
-        <h4 className="text-lg font-bold leading-tight tracking-tight">{food.name}</h4>
+        <h4 className="text-lg font-bold leading-tight tracking-tight text-stone-900">{food.name}</h4>
         <p className="mt-1.5 line-clamp-2 text-[12px] leading-relaxed text-stone-600">{food.description}</p>
 
         {(food.protein || food.calories) && (
@@ -1722,21 +1735,30 @@ function FoodCard({ food, qty, onAdd, onInc, onDec }: { food: FoodItem; qty: num
         <div className="mt-auto flex items-end justify-between border-t border-stone-100 pt-4 mt-5">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Price</div>
-            <div className="font-display text-3xl leading-none text-[#14532D]">₹{food.price}</div>
+            <div className={"font-display text-3xl leading-none " + (food.soldOut ? "text-stone-400 line-through" : "text-[#14532D]")}>
+              ₹{food.price}
+            </div>
           </div>
-          {qty === 0 ? (
+          {food.soldOut ? (
+            <button
+              disabled
+              className="inline-flex items-center gap-1 rounded-full bg-stone-200 px-4 py-2.5 text-[11px] font-black uppercase text-stone-500 cursor-not-allowed shadow-none border border-stone-300"
+            >
+              Sold Out 🚫
+            </button>
+          ) : qty === 0 ? (
             <button
               onClick={onAdd}
-              className="inline-flex items-center gap-1.5 rounded-full bg-[#0B1F16] px-4 py-2.5 text-[12px] font-bold text-white shadow-md transition hover:bg-[#14532D] hover:scale-105"
+              className="inline-flex items-center gap-1.5 rounded-full bg-[#0B1F16] px-4 py-2.5 text-[12px] font-bold text-white shadow-md transition hover:bg-[#14532D] hover:scale-105 cursor-pointer"
             >
               Add
               <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
             </button>
           ) : (
             <div className="flex items-center gap-0.5 rounded-full bg-[#14532D] p-1 text-white shadow-md">
-              <button onClick={onDec} className="h-7 w-7 rounded-full text-base font-medium hover:bg-white/15">−</button>
+              <button onClick={onDec} className="h-7 w-7 rounded-full text-base font-medium hover:bg-white/15 cursor-pointer">−</button>
               <span className="w-6 text-center font-mono text-xs font-bold">{qty}</span>
-              <button onClick={onInc} className="h-7 w-7 rounded-full text-base font-medium hover:bg-white/15">+</button>
+              <button onClick={onInc} className="h-7 w-7 rounded-full text-base font-medium hover:bg-white/15 cursor-pointer">+</button>
             </div>
           )}
         </div>
@@ -4114,6 +4136,28 @@ function AdminDashboard({
     }
   };
 
+  const toggleSoldOut = async (id: string) => {
+    const f = foods.find((x) => x.id === id);
+    if (f) {
+      f.soldOut = !f.soldOut;
+      bumpData();
+      pushToast(`${f.name} marked as ${f.soldOut ? "SOLD OUT 🚫" : "IN STOCK 🟢"}`, f.soldOut ? "warn" : "success");
+      const token = localStorage.getItem("campusbite_token");
+      if (token) {
+        try {
+          const numId = Number(id);
+          if (!isNaN(numId)) {
+            await fetch(`/api/foods/${numId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ soldOut: f.soldOut }),
+            });
+          }
+        } catch {}
+      }
+    }
+  };
+
   const removeFood = async (id: string) => {
     const idx = foods.findIndex((x) => x.id === id);
     if (idx >= 0) {
@@ -4625,6 +4669,15 @@ function AdminDashboard({
                     </button>
                   </div>
                   <div className="col-span-12 flex items-center justify-end gap-2 md:col-span-2">
+                    <button
+                      onClick={() => toggleSoldOut(f.id)}
+                      className={"rounded-full border px-3 py-1 text-[11px] font-bold transition cursor-pointer " +
+                        (f.soldOut
+                          ? "border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                          : "border-emerald-300 bg-emerald-50 text-emerald-800 hover:bg-emerald-100")}
+                    >
+                      {f.soldOut ? "Sold Out 🚫" : "In Stock 🟢"}
+                    </button>
                     <button
                       onClick={() => setEditingFood(f)}
                       className="rounded-full border border-stone-200 px-3 py-1 text-[11px] font-bold text-stone-700 hover:border-[#14532D] hover:text-[#14532D]"
