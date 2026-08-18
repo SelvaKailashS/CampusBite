@@ -2315,11 +2315,11 @@ function ProfileMenu({
 
       {/* Upgraded Digital Campus Pass & Profile Modal */}
       {showProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1F16]/75 backdrop-blur-md animate-fade-in">
-          <div className="w-full max-w-lg overflow-hidden rounded-[32px] bg-[#F6F2EA] shadow-2xl border border-stone-200 text-stone-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-[#0B1F16]/80 backdrop-blur-md animate-fade-in">
+          <div className="flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-[32px] bg-[#F6F2EA] shadow-2xl border border-stone-200 text-stone-800">
             
-            {/* Top digital pass header */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0B1F16] p-6 text-white">
+            {/* Top digital pass header — fixed shrink-0 */}
+            <div className="relative shrink-0 overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0B1F16] p-5 sm:p-6 text-white">
               <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-lime-400/20 blur-2xl" />
               
               <div className="flex items-center justify-between border-b border-white/15 pb-4">
@@ -2333,14 +2333,15 @@ function ProfileMenu({
                 <button
                   onClick={() => setShowProfileModal(false)}
                   className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer"
+                  title="Close Profile"
                 >
                   ✕
                 </button>
               </div>
 
               {/* Student identity card */}
-              <div className="mt-5 flex items-center gap-5">
-                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-[#FCECC5] text-3xl font-black text-[#0B1F16] shadow-xl ring-4 ring-white/20">
+              <div className="mt-4 flex items-center gap-4 sm:gap-5">
+                <div className="relative flex h-16 w-16 sm:h-20 sm:w-20 shrink-0 items-center justify-center rounded-3xl bg-[#FCECC5] text-2xl sm:text-3xl font-black text-[#0B1F16] shadow-xl ring-4 ring-white/20">
                   {initials}
                   <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#14532D] text-xs text-[#FCECC5] ring-2 ring-white">
                     ✓
@@ -2350,7 +2351,7 @@ function ProfileMenu({
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-lime-400/20 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-lime-200 border border-lime-400/30">
                     <span className="h-1.5 w-1.5 rounded-full bg-lime-300 animate-pulse" /> Verified Student
                   </div>
-                  <h3 className="mt-1 text-2xl font-extrabold truncate text-white">{user.name}</h3>
+                  <h3 className="mt-1 text-xl sm:text-2xl font-extrabold truncate text-white">{user.name}</h3>
                   <p className="text-xs text-lime-200/90 truncate">{user.email}</p>
                   
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
@@ -2362,25 +2363,25 @@ function ProfileMenu({
               </div>
             </div>
 
-            {/* Dashboard Content */}
-            <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+            {/* Dashboard Content — scrollable flex-1 */}
+            <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-4">
               {/* Analytics metrics grid */}
               <div>
                 <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D] mb-2">Campus Food Analytics</div>
                 <div className="grid grid-cols-3 gap-2.5">
-                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-center shadow-sm">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-3 text-center shadow-sm">
                     <div className="text-xl mb-0.5">🎟️</div>
                     <div className="font-mono text-2xl font-black text-[#0B1F16]">{totalOrdersCount}</div>
                     <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500">Orders Made</div>
                   </div>
 
-                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-center shadow-sm">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-3 text-center shadow-sm">
                     <div className="text-xl mb-0.5">⚡</div>
                     <div className="font-mono text-2xl font-black text-emerald-800">{activeOrdersCount}</div>
                     <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500">Active Queue</div>
                   </div>
 
-                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-center shadow-sm">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-3 text-center shadow-sm">
                     <div className="text-xl mb-0.5">💳</div>
                     <div className="font-mono text-2xl font-black text-[#14532D]">₹{walletBalance}</div>
                     <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500">Wallet</div>
@@ -2393,7 +2394,7 @@ function ProfileMenu({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#14532D]">Campus Wallet Balance</div>
-                    <div className="font-mono text-3xl font-black text-[#0B1F16] mt-0.5">₹{walletBalance}</div>
+                    <div className="font-mono text-2xl sm:text-3xl font-black text-[#0B1F16] mt-0.5">₹{walletBalance}</div>
                   </div>
                   <button
                     onClick={() => {
@@ -2406,7 +2407,7 @@ function ProfileMenu({
                   </button>
                 </div>
                 <div className="mt-3 flex items-center justify-between text-[11px] text-stone-600 border-t border-emerald-100 pt-2.5">
-                  <span>Official UPI Pay Number: <span className="font-mono font-bold text-stone-900">9360571671</span></span>
+                  <span>UPI Pay Number: <span className="font-mono font-bold text-stone-900">9360571671</span></span>
                   <span className="font-bold text-emerald-800">Instant Credit ✓</span>
                 </div>
               </div>
@@ -2430,19 +2431,27 @@ function ProfileMenu({
                   <span className="font-bold text-stone-600">Verified Email</span>
                 </div>
               </div>
-
-              <div className="flex gap-2 pt-2">
-                <button
-                  onClick={() => {
-                    setShowProfileModal(false);
-                    if (onViewOrders) onViewOrders();
-                  }}
-                  className="flex-1 rounded-full bg-[#0B1F16] py-3.5 text-xs font-extrabold text-white shadow-lg hover:bg-[#14532D] transition cursor-pointer"
-                >
-                  View Order Tokens &amp; History →
-                </button>
-              </div>
             </div>
+
+            {/* Sticky Bottom Actions Bar with explicit Close button */}
+            <div className="shrink-0 border-t border-stone-200 bg-white p-4 flex gap-2">
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  if (onViewOrders) onViewOrders();
+                }}
+                className="flex-1 rounded-full bg-[#0B1F16] py-3 text-xs font-extrabold text-white shadow-md hover:bg-[#14532D] transition cursor-pointer"
+              >
+                View Order Tokens →
+              </button>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="rounded-full border border-stone-300 bg-stone-100 px-5 py-3 text-xs font-extrabold text-stone-700 hover:bg-stone-200 transition cursor-pointer"
+              >
+                Close ✕
+              </button>
+            </div>
+
           </div>
         </div>
       )}
