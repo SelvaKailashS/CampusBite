@@ -495,7 +495,22 @@ export default function App() {
               </div>
             )}
             {/* Profile chip */}
-            <ProfileMenu user={user} onLogout={() => { localStorage.removeItem("campusbite_token"); setUser(null); setCart([]); setCartCanteenId(null); setOrders([]); setView("home"); }} />
+            <ProfileMenu
+              user={user}
+              totalOrdersCount={orders.length}
+              activeOrdersCount={activeOrders.length}
+              walletBalance={walletBalance}
+              onLogout={() => {
+                localStorage.removeItem("campusbite_token");
+                setUser(null);
+                setCart([]);
+                setCartCanteenId(null);
+                setOrders([]);
+                setView("home");
+              }}
+              onOpenWallet={() => setTopUpOpen(true)}
+              onViewOrders={() => setView("orders")}
+            />
 
             {!isAdmin && (
             <button
@@ -2093,16 +2108,34 @@ function OrderRow({ order, onTrack }: { order: Order; onTrack: () => void }) {
   );
 }
 
-function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
+function ProfileMenu({
+  user,
+  totalOrdersCount = 0,
+  activeOrdersCount = 0,
+  walletBalance = 450,
+  onLogout,
+  onOpenWallet,
+  onViewOrders,
+}: {
+  user: User;
+  totalOrdersCount?: number;
+  activeOrdersCount?: number;
+  walletBalance?: number;
+  onLogout: () => void;
+  onOpenWallet?: () => void;
+  onViewOrders?: () => void;
+}) {
   const [open, setOpen] = useState(false);
-  const initials = user.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const initials = user.name ? user.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() : "ST";
   const scopedCanteen = user.role === "admin" && user.canteenId ? canteens.find((c) => c.id === user.canteenId) : null;
   const isSuperAdmin = user.role === "admin" && !user.canteenId;
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-full border border-stone-900/10 bg-white py-1.5 pl-1.5 pr-3 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-900/25"
+        className="flex items-center gap-2 rounded-full border border-stone-900/10 bg-white py-1.5 pl-1.5 pr-3 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-900/25 cursor-pointer"
       >
         <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#14532D] text-[11px] font-bold text-[#FCECC5]">
           {initials}
@@ -2112,14 +2145,14 @@ function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-64 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl">
+          <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl animate-fade-in">
             <div className="border-b border-stone-100 bg-[#F6F2EA] p-4">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#14532D] text-sm font-bold text-[#FCECC5]">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-bold">{user.name}</div>
+                  <div className="truncate font-bold text-stone-900">{user.name}</div>
                   <div className="truncate text-[11px] text-stone-500">
                     {user.role === "admin"
                       ? (isSuperAdmin ? "🛡 Super Admin · College-wide" : "🛡 Canteen Admin")
@@ -2129,8 +2162,16 @@ function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
               </div>
               <div className="mt-2 truncate text-[11px] text-stone-600">{user.email}</div>
 
+              {/* Total Orders Made Pill */}
+              <div className="mt-3 flex items-center justify-between rounded-xl bg-[#14532D]/10 p-2.5 text-xs">
+                <span className="font-semibold text-[#14532D]">🎟️ Orders Made:</span>
+                <span className="rounded-full bg-[#14532D] px-2.5 py-0.5 font-mono text-[11px] font-bold text-[#FCECC5]">
+                  {totalOrdersCount} {totalOrdersCount === 1 ? "order" : "orders"}
+                </span>
+              </div>
+
               {scopedCanteen && (
-                <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#14532D]/20 bg-white p-2">
+                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#14532D]/20 bg-white p-2">
                   <div className="h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-stone-100">
                     <img src={scopedCanteen.logo} alt="" className="h-full w-full object-cover" />
                   </div>
@@ -2142,26 +2183,117 @@ function ProfileMenu({ user, onLogout }: { user: User; onLogout: () => void }) {
                 </div>
               )}
             </div>
-            <div className="p-2 text-sm">
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50">
-                👤 <span>My profile</span>
+
+            <div className="p-2 text-sm space-y-0.5">
+              <button
+                onClick={() => { setOpen(false); setShowProfileModal(true); }}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50 font-medium cursor-pointer"
+              >
+                <span className="flex items-center gap-2">👤 <span>My profile</span></span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">View</span>
               </button>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50">
-                🎓 <span>Campus wallet</span>
+              <button
+                onClick={() => { setOpen(false); if (onViewOrders) onViewOrders(); }}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50 font-medium cursor-pointer"
+              >
+                <span className="flex items-center gap-2">🎟️ <span>Tokens / Orders</span></span>
+                <span className="rounded-full bg-stone-100 px-2 py-0.5 font-mono text-[10px] font-bold text-stone-700">
+                  {totalOrdersCount}
+                </span>
               </button>
-              <button className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50">
-                ⚙ <span>Preferences</span>
+              <button
+                onClick={() => { setOpen(false); if (onOpenWallet) onOpenWallet(); }}
+                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50 font-medium cursor-pointer"
+              >
+                <span className="flex items-center gap-2">🎓 <span>Campus wallet</span></span>
+                <span className="font-mono text-xs font-bold text-[#14532D]">₹{walletBalance}</span>
               </button>
               <div className="my-1 h-px bg-stone-100" />
               <button
                 onClick={() => { setOpen(false); onLogout(); }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[#D64545] hover:bg-rose-50"
+                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[#D64545] hover:bg-rose-50 font-medium cursor-pointer"
               >
                 ↪ <span>Sign out</span>
               </button>
             </div>
           </div>
         </>
+      )}
+
+      {/* My Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-md overflow-hidden rounded-[28px] bg-white p-6 shadow-2xl border border-stone-100 text-stone-800">
+            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#14532D]">Student Account</div>
+                <h3 className="text-xl font-bold text-stone-900">My Profile & Stats</h3>
+              </div>
+              <button
+                onClick={() => setShowProfileModal(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-100 text-stone-500 hover:bg-stone-200 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="mt-5 flex items-center gap-4 rounded-2xl bg-gradient-to-r from-[#0B1F16] to-[#14532D] p-5 text-white shadow-lg">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#FCECC5] text-xl font-extrabold text-[#0B1F16] shadow-sm">
+                {initials}
+              </div>
+              <div className="min-w-0 flex-1">
+                <h4 className="text-lg font-bold truncate">{user.name}</h4>
+                <p className="text-xs text-lime-200 truncate">{user.email}</p>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-white/90">
+                  <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{user.dept || "Student"}</span>
+                  <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{user.year || "NIET"}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats Grid */}
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 text-center">
+                <div className="text-2xl mb-1">🎟️</div>
+                <div className="font-mono text-2xl font-extrabold text-[#0B1F16]">{totalOrdersCount}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mt-1">Orders Made</div>
+              </div>
+              <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 text-center">
+                <div className="text-2xl mb-1">⚡</div>
+                <div className="font-mono text-2xl font-extrabold text-lime-700">{activeOrdersCount}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mt-1">Active Tokens</div>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 flex items-center justify-between">
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Campus Wallet</div>
+                <div className="font-mono text-xl font-bold text-[#14532D]">₹{walletBalance}</div>
+              </div>
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  if (onOpenWallet) onOpenWallet();
+                }}
+                className="rounded-full bg-[#14532D] px-4 py-2 text-xs font-bold text-white hover:bg-[#0F3E22] cursor-pointer"
+              >
+                + Top Up Wallet
+              </button>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={() => {
+                  setShowProfileModal(false);
+                  if (onViewOrders) onViewOrders();
+                }}
+                className="flex-1 rounded-full bg-[#0B1F16] py-3 text-xs font-bold text-white hover:bg-[#14532D] cursor-pointer"
+              >
+                View Order Tokens →
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
