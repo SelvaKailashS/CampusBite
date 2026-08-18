@@ -64,6 +64,12 @@ export interface DeliveryLocation {
   desk: number;
 }
 
+export interface GroupSplitMember {
+  name: string;
+  amount: number;
+  paid?: boolean;
+}
+
 export interface Order {
   id: string;
   token: string;
@@ -79,4 +85,6 @@ export interface Order {
   payment: PaymentMode;
   paymentStatus: PaymentStatus;
   scheduledTime?: string;
+  isGroupOrder?: boolean;
+  groupMembers?: GroupSplitMember[];
 }

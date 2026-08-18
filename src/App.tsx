@@ -267,6 +267,9 @@ export default function App() {
   const [location, setLocation] = useState<DeliveryLocation>({ block: "Block A", room: "A-304", row: 3, desk: 12 });
   const [orderMode, setOrderMode] = useState<OrderMode>("pickup");
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [invoiceModalOrder, setInvoiceModalOrder] = useState<Order | null>(null);
+  const [groupModalOpen, setGroupModalOpen] = useState(false);
+  const [groupMembers, setGroupMembers] = useState<GroupSplitMember[] | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterKey>("All");
   const [healthFilter, setHealthFilter] = useState<HealthTag>("all");
@@ -549,6 +552,8 @@ export default function App() {
           payment: dbOrder.payment,
           paymentStatus: dbOrder.paymentStatus,
           scheduledTime,
+          isGroupOrder: !!groupMembers?.length,
+          groupMembers: groupMembers || undefined,
         };
         if (payment === "wallet") setWalletBalance((b) => b - total);
         setOrders((o) => [order, ...o]);
@@ -556,6 +561,7 @@ export default function App() {
         setCartCanteenId(null);
         setCartOpen(false);
         setCheckoutOpen(false);
+        setGroupMembers(null);
         setTrackingOrderId(order.id);
         pushToast(`Token ${order.token} saved to database · ETA ${order.etaMin} min 🔔`);
         return;
@@ -581,12 +587,15 @@ export default function App() {
       payment,
       paymentStatus: payment === "counter-cash" ? "pending" : "paid",
       scheduledTime,
+      isGroupOrder: !!groupMembers?.length,
+      groupMembers: groupMembers || undefined,
     };
     setOrders((o) => [order, ...o]);
     setCart([]);
     setCartCanteenId(null);
     setCartOpen(false);
     setCheckoutOpen(false);
+    setGroupMembers(null);
     setTrackingOrderId(order.id);
     pushToast(`Token ${order.token} generated · ETA ${order.etaMin} min 🔔`);
   };
@@ -1440,6 +1449,7 @@ export default function App() {
           onRemove={removeItem}
           onCheckout={() => { setCartOpen(false); setCheckoutOpen(true); }}
           onChangeLocation={() => { setCartOpen(false); setLocationOpen(true); }}
+          onOpenGroupModal={() => { setCartOpen(false); setGroupModalOpen(true); }}
         />
       )}
 
@@ -1453,6 +1463,27 @@ export default function App() {
           walletBalance={walletBalance}
           onClose={() => setCheckoutOpen(false)}
           onPay={placeOrder}
+        />
+      )}
+
+      {invoiceModalOrder && (
+        <InvoiceModal
+          order={invoiceModalOrder}
+          user={user}
+          onClose={() => setInvoiceModalOrder(null)}
+        />
+      )}
+
+      {groupModalOpen && (
+        <GroupOrderModal
+          cartItems={cartItems}
+          subtotal={subtotal}
+          onClose={() => setGroupModalOpen(false)}
+          onConfirmGroupOrder={(members) => {
+            setGroupMembers(members);
+            setGroupModalOpen(false);
+            setCheckoutOpen(true);
+          }}
         />
       )}
 
@@ -1487,6 +1518,7 @@ export default function App() {
           canteen={canteens.find((c) => c.id === trackingOrder.canteenId)!}
           onClose={() => setTrackingOrderId(null)}
           onCancelOrder={cancelStudentOrder}
+          onOpenInvoice={(o) => setInvoiceModalOrder(o)}
         />
       )}
 
@@ -1769,7 +1801,7 @@ function FoodCard({ food, qty, onAdd, onInc, onDec }: { food: FoodItem; qty: num
 
 function CartDrawer({
   onClose, cartItems, subtotal, canteen, mode, location, onModeChange,
-  onInc, onDec, onRemove, onCheckout, onChangeLocation,
+  onInc, onDec, onRemove, onCheckout, onChangeLocation, onOpenGroupModal,
 }: {
   onClose: () => void;
   cartItems: { food: FoodItem; qty: number; foodId: string }[];
@@ -1783,6 +1815,7 @@ function CartDrawer({
   onRemove: (id: string) => void;
   onCheckout: () => void;
   onChangeLocation: () => void;
+  onOpenGroupModal: () => void;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -1893,15 +1926,24 @@ function CartDrawer({
                 <dd className="font-display text-3xl text-[#14532D]">₹{subtotal}</dd>
               </div>
             </dl>
-            <button
-              onClick={onCheckout}
-              className="group mt-5 flex w-full items-center justify-center gap-2.5 rounded-full bg-[#0B1F16] py-4 text-sm font-bold text-white shadow-lg transition hover:bg-[#14532D] hover:scale-[1.01]"
-            >
-              Continue to payment
-              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 transition group-hover:translate-x-0.5">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-              </span>
-            </button>
+            <div className="mt-5 flex gap-2">
+              <button
+                onClick={onOpenGroupModal}
+                className="rounded-full border border-amber-300 bg-amber-50 px-4 py-3.5 text-xs font-black text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+                title="Split order among roommates & friends"
+              >
+                👥 Group Split
+              </button>
+              <button
+                onClick={onCheckout}
+                className="group flex flex-1 items-center justify-center gap-2.5 rounded-full bg-[#0B1F16] py-4 text-sm font-bold text-white shadow-lg transition hover:bg-[#14532D] hover:scale-[1.01] cursor-pointer"
+              >
+                Continue to payment
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 transition group-hover:translate-x-0.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                </span>
+              </button>
+            </div>
           </div>
         )}
       </aside>
@@ -2235,7 +2277,7 @@ function LocationPicker({ location, onClose, onSave }: { location: DeliveryLocat
   );
 }
 
-function OrderTrackerModal({ order, canteen, onClose, onCancelOrder }: { order: Order; canteen: Canteen; onClose: () => void; onCancelOrder?: (id: string) => void; }) {
+function OrderTrackerModal({ order, canteen, onClose, onCancelOrder, onOpenInvoice }: { order: Order; canteen: Canteen; onClose: () => void; onCancelOrder?: (id: string) => void; onOpenInvoice?: (o: Order) => void; }) {
   const stages = order.mode === "pickup" ? pickupStages : orderStages;
   const remaining = Math.max(1, order.etaMin - order.stage * 2);
   const done = order.stage >= stages.length - 1;
@@ -2298,14 +2340,14 @@ function OrderTrackerModal({ order, canteen, onClose, onCancelOrder }: { order: 
           {/* Token QR Code Card */}
           <div className="flex flex-col items-center justify-center rounded-2xl bg-white p-4 border border-stone-200 shadow-sm text-center">
             <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">Show QR Code to Canteen Staff</div>
-            <div className="mt-2 h-36 w-36 overflow-hidden rounded-2xl border-2 border-[#14532D] bg-white p-1.5 shadow-md">
+            <div className="mt-3 overflow-hidden rounded-xl border border-stone-200 bg-white p-2 shadow-inner">
               <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(order.token)}`}
-                alt={`Token ${order.token}`}
-                className="h-full w-full object-contain"
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(`CB-ORDER:${order.id}:${order.token}:${order.total}`)}`}
+                alt="Order Token QR Code"
+                className="h-36 w-36 object-contain"
               />
             </div>
-            <div className="mt-2 font-mono text-xs font-black text-stone-800">TOKEN: {order.token}</div>
+            <div className="mt-2 font-mono text-xs font-bold text-stone-600">Scan at Counter Scanner</div>
           </div>
 
           {!done ? (
@@ -2387,6 +2429,321 @@ function OrderTrackerModal({ order, canteen, onClose, onCancelOrder }: { order: 
         </div>
       </div>
     </div>
+  );
+}
+
+function InvoiceModal({ order, canteen, user, onClose }: {
+  order: Order;
+  canteen?: Canteen;
+  user: User | null;
+  onClose: () => void;
+}) {
+  const invoiceNo = `CB-INV-${new Date(order.placedAt).getFullYear()}-${order.id.slice(-6).toUpperCase()}`;
+  const orderDate = new Date(order.placedAt).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+  const canteenObj = canteen || canteens.find((c) => c.id === order.canteenId);
+
+  // 5% GST breakdown calculation (included in total)
+  const gstAmount = Math.round((order.total * 5) / 105);
+  const netSubtotal = order.total - gstAmount;
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handleCopySummary = () => {
+    const summary = `🧾 CampusBite Invoice #${invoiceNo}\nCanteen: ${canteenObj?.name || "Campus Kitchen"}\nCustomer: ${order.student}\nTotal: ₹${order.total} (${order.paymentStatus.toUpperCase()})\nDate: ${orderDate}`;
+    navigator.clipboard.writeText(summary);
+    alert("Invoice summary copied to clipboard!");
+  };
+
+  return (
+    <Modal onClose={onClose} title="Tax Invoice & Official Receipt">
+      <div className="space-y-6 text-stone-900" id="printable-invoice">
+        {/* Header */}
+        <div className="flex flex-wrap items-center justify-between border-b border-stone-200 pb-5 gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-display text-2xl font-bold tracking-tight text-[#0B1F16]">CampusBite</span>
+              <span className="rounded-full bg-[#14532D] px-2.5 py-0.5 font-mono text-[9px] font-bold text-[#FCECC5] uppercase tracking-widest">
+                Tax Invoice
+              </span>
+            </div>
+            <div className="mt-1 text-[11px] font-semibold text-stone-500">
+              NIET Campus Digital Dining Services · FSSAI Reg: #22223001004812
+            </div>
+          </div>
+          <div className="text-right font-mono">
+            <div className="text-xs font-bold text-[#14532D]">{invoiceNo}</div>
+            <div className="text-[10px] text-stone-500">{orderDate}</div>
+          </div>
+        </div>
+
+        {/* Billed To / Canteen Details Grid */}
+        <div className="grid grid-cols-2 gap-4 rounded-2xl bg-stone-50 p-4 border border-stone-200 text-xs">
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-[#14532D]">Billed To (Customer)</div>
+            <div className="mt-1 font-bold text-stone-900">{order.student}</div>
+            <div className="text-[11px] text-stone-500">
+              {user?.dept ? `${user.dept} · ${user.year}` : "NIET Student / Faculty"}
+            </div>
+            {order.mode === "delivery" && order.location && (
+              <div className="mt-1 font-mono text-[10px] text-stone-600">
+                📍 {order.location.block}, Room {order.location.room}
+              </div>
+            )}
+          </div>
+          <div>
+            <div className="text-[10px] font-extrabold uppercase tracking-widest text-[#14532D]">Merchant / Kitchen</div>
+            <div className="mt-1 font-bold text-stone-900">{canteenObj?.name || "Campus Canteen"}</div>
+            <div className="text-[11px] text-stone-500">📍 {canteenObj?.location || "Main Campus"}</div>
+            <div className="mt-1 font-mono text-[10px] text-stone-600">GSTIN: 07AAACC4112M1Z5</div>
+          </div>
+        </div>
+
+        {/* Group Order Members Notice */}
+        {order.isGroupOrder && order.groupMembers && order.groupMembers.length > 0 && (
+          <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs">
+            <div className="font-bold text-amber-900 flex items-center gap-1.5">
+              👥 Group Order Bill Split ({order.groupMembers.length} Members)
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
+              {order.groupMembers.map((m, idx) => (
+                <div key={idx} className="flex justify-between border-b border-amber-200/60 pb-1 text-[11px]">
+                  <span className="font-semibold text-amber-900">{m.name}</span>
+                  <span className="font-mono font-bold text-amber-950">₹{m.amount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Line Items Table */}
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-stone-500 mb-2">Itemized Particulars</div>
+          <div className="overflow-hidden rounded-2xl border border-stone-200">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#E7EEE7] font-extrabold text-[#14532D] uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="p-3">Item Description</th>
+                  <th className="p-3 text-center">Qty</th>
+                  <th className="p-3 text-right">Unit Price</th>
+                  <th className="p-3 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-stone-100 font-medium">
+                {order.items.map((item, idx) => (
+                  <tr key={idx} className="hover:bg-stone-50">
+                    <td className="p-3 font-semibold text-stone-900">
+                      {item.emoji} {item.name}
+                    </td>
+                    <td className="p-3 text-center font-mono">{item.qty}</td>
+                    <td className="p-3 text-right font-mono">₹{item.price}</td>
+                    <td className="p-3 text-right font-mono font-bold">₹{item.price * item.qty}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Calculation & Totals */}
+        <div className="flex flex-col items-end border-t border-stone-200 pt-3 text-xs space-y-1.5">
+          <div className="flex justify-between w-64 text-stone-600">
+            <span>Net Subtotal (excl. tax):</span>
+            <span className="font-mono font-semibold">₹{netSubtotal}</span>
+          </div>
+          <div className="flex justify-between w-64 text-stone-600">
+            <span>SGST + CGST (5% incl.):</span>
+            <span className="font-mono font-semibold">₹{gstAmount}</span>
+          </div>
+          <div className="flex justify-between w-64 text-stone-600">
+            <span>Convenience / Runner Fee:</span>
+            <span className="font-mono font-semibold text-emerald-700">₹0 (FREE)</span>
+          </div>
+          <div className="flex justify-between w-64 border-t border-stone-300 pt-2 text-sm font-extrabold text-[#0B1F16]">
+            <span>Grand Total Paid:</span>
+            <span className="font-mono text-base text-[#14532D]">₹{order.total}</span>
+          </div>
+        </div>
+
+        {/* Payment Footer Tag */}
+        <div className="flex items-center justify-between rounded-2xl bg-[#0B1F16] p-4 text-white">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-widest text-[#FCECC5]">Payment Status</div>
+            <div className="text-sm font-bold capitalize flex items-center gap-1.5 mt-0.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              {order.paymentStatus === "paid" ? "PAID ONLINE" : "CASH ON COUNTER"} ({order.payment})
+            </div>
+          </div>
+          <div className="text-right font-mono">
+            <div className="text-[10px] text-white/60">Token Number</div>
+            <div className="text-xl font-bold tracking-widest text-[#FCECC5]">{order.token}</div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex gap-3 pt-2">
+          <button
+            onClick={handleCopySummary}
+            className="flex-1 rounded-2xl border border-stone-200 bg-white py-3 text-xs font-extrabold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
+          >
+            📋 Copy Invoice Text
+          </button>
+          <button
+            onClick={handlePrint}
+            className="flex-1 rounded-2xl bg-[#14532D] py-3 text-xs font-extrabold text-white shadow-md hover:bg-[#0F3E22] transition cursor-pointer"
+          >
+            🖨️ Print / Save PDF
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function GroupOrderModal({
+  cartItems,
+  subtotal,
+  onConfirmGroupOrder,
+  onClose,
+}: {
+  cartItems: (CartItem & { food: FoodItem })[];
+  subtotal: number;
+  onConfirmGroupOrder: (members: GroupSplitMember[]) => void;
+  onClose: () => void;
+}) {
+  const [members, setMembers] = useState<string[]>(["Me (Host)", "Friend 1"]);
+  const [newMemberName, setNewMemberName] = useState("");
+
+  const splitAmount = members.length > 0 ? Math.round(subtotal / members.length) : subtotal;
+
+  const handleAddMember = () => {
+    if (!newMemberName.trim()) return;
+    setMembers((prev) => [...prev, newMemberName.trim()]);
+    setNewMemberName("");
+  };
+
+  const handleRemoveMember = (idx: number) => {
+    if (members.length <= 1) return;
+    setMembers((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleCopyWhatsAppSplit = () => {
+    const text = `🍽️ *CampusBite Group Order Split*\n` +
+      `Total Cart: ₹${subtotal} (${members.length} members)\n` +
+      `Per person share: *₹${splitAmount}*\n\n` +
+      members.map((m) => `• ${m}: ₹${splitAmount}`).join("\n") +
+      `\n\nPay your share to the group host! 🚀`;
+
+    navigator.clipboard.writeText(text);
+    alert("WhatsApp bill split message copied to clipboard!");
+  };
+
+  const handleProceed = () => {
+    const groupData: GroupSplitMember[] = members.map((name) => ({
+      name,
+      amount: splitAmount,
+      paid: true,
+    }));
+    onConfirmGroupOrder(groupData);
+  };
+
+  return (
+    <Modal onClose={onClose} title="👥 Group Order & Bill Splitter">
+      <div className="space-y-6">
+        <div className="rounded-2xl border border-stone-200 bg-[#F6F2EA] p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-stone-700">Total Group Cart Amount</span>
+            <span className="font-display text-2xl text-[#14532D]">₹{subtotal}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-between text-xs text-stone-600 border-t border-stone-200/60 pt-2">
+            <span>Split Equally ({members.length} members)</span>
+            <span className="font-mono font-bold text-[#0B1F16]">₹{splitAmount} / person</span>
+          </div>
+        </div>
+
+        {/* Member Manager */}
+        <div>
+          <label className="text-[10px] font-extrabold uppercase tracking-widest text-[#14532D]">
+            Group Members ({members.length})
+          </label>
+          <div className="mt-2 space-y-2 max-h-48 overflow-y-auto pr-1">
+            {members.map((m, idx) => (
+              <div key={idx} className="flex items-center justify-between rounded-xl bg-stone-50 p-3 border border-stone-200 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#14532D] text-[10px] font-bold text-white">
+                    {idx + 1}
+                  </span>
+                  <span className="font-bold text-stone-900">{m}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-mono font-bold text-[#14532D]">₹{splitAmount}</span>
+                  {idx > 0 && (
+                    <button
+                      onClick={() => handleRemoveMember(idx)}
+                      className="text-stone-400 hover:text-rose-600 text-sm font-bold cursor-pointer"
+                      title="Remove member"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Add member input */}
+          <div className="mt-3 flex gap-2">
+            <input
+              type="text"
+              value={newMemberName}
+              onChange={(e) => setNewMemberName(e.target.value)}
+              placeholder="Enter friend or roommate name..."
+              className="flex-1 rounded-xl border border-stone-200 px-3.5 py-2.5 text-xs font-semibold outline-none focus:border-[#14532D]"
+              onKeyDown={(e) => e.key === "Enter" && handleAddMember()}
+            />
+            <button
+              onClick={handleAddMember}
+              className="rounded-xl bg-[#0B1F16] px-4 py-2.5 text-xs font-extrabold text-white hover:bg-[#14532D] transition cursor-pointer"
+            >
+              + Add
+            </button>
+          </div>
+        </div>
+
+        {/* Item Breakdown Preview */}
+        <div>
+          <div className="text-[10px] font-extrabold uppercase tracking-widest text-stone-500 mb-2">Cart Items ({cartItems.length})</div>
+          <ul className="space-y-1 text-xs">
+            {cartItems.map((ci) => (
+              <li key={ci.foodId} className="flex justify-between border-b border-dashed border-stone-100 py-1.5">
+                <span className="font-medium text-stone-800">{ci.food.emoji} {ci.food.name} × {ci.qty}</span>
+                <span className="font-mono text-stone-500">₹{ci.food.price * ci.qty}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Actions */}
+        <div className="flex gap-2 pt-2">
+          <button
+            onClick={handleCopyWhatsAppSplit}
+            className="flex-1 rounded-2xl border border-emerald-300 bg-emerald-50 py-3 text-xs font-extrabold text-emerald-900 hover:bg-emerald-100 transition cursor-pointer"
+          >
+            💬 Copy WhatsApp Split
+          </button>
+          <button
+            onClick={handleProceed}
+            className="flex-1 rounded-2xl bg-[#14532D] py-3 text-xs font-extrabold text-white shadow-md hover:bg-[#0F3E22] transition cursor-pointer"
+          >
+            Proceed to Checkout →
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
