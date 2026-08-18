@@ -417,21 +417,7 @@ export default function App() {
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3200);
   };
 
-  useEffect(() => {
-    const t = setInterval(() => {
-      setOrders((prev) =>
-        prev.map((o) => {
-          // Auto advance from Stage 0 (Order Confirmed) to Stage 1 (Preparing) after 3s
-          if (o.stage === 0) {
-            return { ...o, stage: 1 };
-          }
-          // Stop at Stage 1 ("Preparing") — Admin must approve & mark ready in Kitchen/Admin view!
-          return o;
-        })
-      );
-    }, 3000);
-    return () => clearInterval(t);
-  }, []);
+
 
   const canteenFoods = useMemo(() => foods.filter((f) => f.canteenId === selectedCanteenId), [selectedCanteenId]);
 
