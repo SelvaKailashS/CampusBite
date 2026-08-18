@@ -486,6 +486,25 @@ export default function App() {
     pushToast(`Token ${order.token} generated · ETA ${order.etaMin} min 🔔`);
   };
 
+  const cancelStudentOrder = (orderId: string) => {
+    const target = orders.find((o) => o.id === orderId);
+    if (!target) return;
+    if (target.stage >= 2) {
+      pushToast("Cannot cancel: Food is already ready or collected!", "warn");
+      return;
+    }
+    if (confirm(`Cancel token ${target.token}? ${target.payment === "wallet" ? `₹${target.total} will be refunded to your Campus Wallet.` : ""}`)) {
+      if (target.payment === "wallet") {
+        setWalletBalance((b) => b + target.total);
+      }
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
+      if (trackingOrderId === orderId) {
+        setTrackingOrderId(null);
+      }
+      pushToast(`Order ${target.token} cancelled. ${target.payment === "wallet" ? `₹${target.total} refunded to wallet!` : "Refund processed."}`, "info");
+    }
+  };
+
   const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     setMobileMenu(false);
@@ -762,7 +781,7 @@ export default function App() {
       ) : view === "kitchen" ? (
         <KitchenPortal orders={orders} setOrders={setOrders} pushToast={pushToast} user={user} />
       ) : view === "orders" ? (
-        <OrdersView orders={orders} onTrack={(id) => setTrackingOrderId(id)} />
+        <OrdersView orders={orders} onTrack={(id) => setTrackingOrderId(id)} onCancelOrder={cancelStudentOrder} />
       ) : (
         <main className="mx-auto max-w-[1400px] px-6 py-10 lg:py-12">
 
@@ -1318,6 +1337,7 @@ export default function App() {
           order={trackingOrder}
           canteen={canteens.find((c) => c.id === trackingOrder.canteenId)!}
           onClose={() => setTrackingOrderId(null)}
+          onCancelOrder={cancelStudentOrder}
         />
       )}
 
@@ -2015,7 +2035,7 @@ function LocationPicker({ location, onClose, onSave }: { location: DeliveryLocat
   );
 }
 
-function OrderTrackerModal({ order, canteen, onClose }: { order: Order; canteen: Canteen; onClose: () => void; }) {
+function OrderTrackerModal({ order, canteen, onClose, onCancelOrder }: { order: Order; canteen: Canteen; onClose: () => void; onCancelOrder?: (id: string) => void; }) {
   const stages = order.mode === "pickup" ? pickupStages : orderStages;
   const remaining = Math.max(1, order.etaMin - order.stage * 2);
   const done = order.stage >= stages.length - 1;
@@ -2153,6 +2173,16 @@ function OrderTrackerModal({ order, canteen, onClose }: { order: Order; canteen:
             <div className="mt-3 rounded-2xl bg-[#E7EEE7] p-3 text-xs text-[#14532D]">
               📍 Delivering to <span className="font-bold">{order.location.block}, {order.location.room}, Row {order.location.row}, Desk {order.location.desk}</span>
             </div>
+          )}
+
+          {/* Cancel Order Option */}
+          {order.stage < 2 && onCancelOrder && (
+            <button
+              onClick={() => onCancelOrder(order.id)}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-rose-300 bg-rose-50 py-3.5 text-xs font-black text-rose-700 hover:bg-rose-100 transition cursor-pointer shadow-sm"
+            >
+              🚫 Cancel Order &amp; Refund Funds
+            </button>
           )}
         </div>
       </div>
@@ -2293,7 +2323,7 @@ function AIConcierge({ canteen, allFoods, onClose, onAdd }: { canteen: Canteen; 
   );
 }
 
-function OrdersView({ orders, onTrack }: { orders: Order[]; onTrack: (id: string) => void; }) {
+function OrdersView({ orders, onTrack, onCancelOrder }: { orders: Order[]; onTrack: (id: string) => void; onCancelOrder?: (id: string) => void; }) {
   const active = orders.filter((o) => {
     const max = o.mode === "pickup" ? pickupStages.length - 1 : orderStages.length - 1;
     return o.stage < max;
@@ -2325,7 +2355,7 @@ function OrdersView({ orders, onTrack }: { orders: Order[]; onTrack: (id: string
             <>
               <h3 className="mt-10 text-2xl font-bold">Active <span className="text-stone-400">({active.length})</span></h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {active.map((o) => <OrderRow key={o.id} order={o} onTrack={() => onTrack(o.id)} />)}
+                {active.map((o) => <OrderRow key={o.id} order={o} onTrack={() => onTrack(o.id)} onCancelOrder={onCancelOrder} />)}
               </div>
             </>
           )}
@@ -2333,7 +2363,7 @@ function OrdersView({ orders, onTrack }: { orders: Order[]; onTrack: (id: string
             <>
               <h3 className="mt-10 text-2xl font-bold">Completed <span className="text-stone-400">({past.length})</span></h3>
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {past.map((o) => <OrderRow key={o.id} order={o} onTrack={() => onTrack(o.id)} />)}
+                {past.map((o) => <OrderRow key={o.id} order={o} onTrack={() => onTrack(o.id)} onCancelOrder={onCancelOrder} />)}
               </div>
             </>
           )}
@@ -2343,16 +2373,15 @@ function OrdersView({ orders, onTrack }: { orders: Order[]; onTrack: (id: string
   );
 }
 
-function OrderRow({ order, onTrack }: { order: Order; onTrack: () => void }) {
+function OrderRow({ order, onTrack, onCancelOrder }: { order: Order; onTrack: () => void; onCancelOrder?: (id: string) => void; }) {
   const c = canteens.find((x) => x.id === order.canteenId)!;
   const stages = order.mode === "pickup" ? pickupStages : orderStages;
   const done = order.stage >= stages.length - 1;
+  const canCancel = order.stage < 2;
+
   return (
-    <button
-      onClick={onTrack}
-      className="group relative overflow-hidden rounded-3xl bg-white p-6 text-left shadow-sm ring-1 ring-stone-900/5 transition hover:-translate-y-0.5 hover:shadow-xl"
-    >
-      <div className="flex items-start justify-between gap-4">
+    <div className="group relative overflow-hidden rounded-3xl bg-white p-6 text-left shadow-sm ring-1 ring-stone-900/5 transition hover:shadow-xl">
+      <div className="flex items-start justify-between gap-4 cursor-pointer" onClick={onTrack}>
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D]">Token</div>
           <div className="mt-1 font-mono text-4xl font-bold tracking-[0.15em] text-[#0B1F16]">{order.token}</div>
@@ -2378,12 +2407,25 @@ function OrderRow({ order, onTrack }: { order: Order; onTrack: () => void }) {
       </div>
       <div className="mt-3 flex items-center justify-between text-[11px]">
         <span className="font-semibold uppercase tracking-[0.15em] text-stone-500">{stages[order.stage].label}</span>
-        <span className="inline-flex items-center gap-1 font-bold text-[#14532D]">
-          {done ? "Completed" : "Track"}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition group-hover:translate-x-0.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-        </span>
+        <div className="flex items-center gap-2">
+          {canCancel && onCancelOrder && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onCancelOrder(order.id); }}
+              className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1 text-[10px] font-extrabold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+            >
+              Cancel &amp; Refund
+            </button>
+          )}
+          <button
+            onClick={onTrack}
+            className="inline-flex items-center gap-1 font-bold text-[#14532D] hover:underline cursor-pointer"
+          >
+            {done ? "Completed" : "Track"}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition group-hover:translate-x-0.5"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          </button>
+        </div>
       </div>
-    </button>
+    </div>
   );
 }
 
