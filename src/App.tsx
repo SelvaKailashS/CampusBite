@@ -2727,6 +2727,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPw, setConfirmPw] = useState("");
+  const [staffCode, setStaffCode] = useState("");
   const [agree, setAgree] = useState(false);
   const [showPw, setShowPw] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -2741,6 +2742,13 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
 
     if (mode === "register") {
       if (role === "admin") { setError("Admin accounts are pre-provisioned. Use Sign in instead."); return; }
+      if (role === "staff") {
+        const isFacultyEmail = email.trim().toLowerCase().endsWith("@niet.ac.in") || email.trim().toLowerCase().endsWith("@niet.edu.in");
+        if (!isFacultyEmail && staffCode.trim().toUpperCase() !== "FACULTY2026") {
+          setError("Faculty registration requires a valid Faculty Verification Code (FACULTY2026) or college email (@niet.ac.in). Students must use the Student tab.");
+          return;
+        }
+      }
       if (password !== confirmPw) { setError("Passwords don't match. Try again."); return; }
       if (!agree) { setError("Please accept the Terms & Food Hygiene Policy to register."); return; }
     }
@@ -2986,6 +2994,21 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
                   </div>
                 )}
               </Field>
+
+              {role === "staff" && mode === "register" && (
+                <Field label="Faculty Verification Code">
+                  <input
+                    value={staffCode}
+                    onChange={(e) => setStaffCode(e.target.value)}
+                    type="text"
+                    placeholder="Enter Faculty Code (e.g. FACULTY2026)"
+                    className="w-full rounded-2xl border border-stone-200 bg-white px-4 py-3 text-sm font-medium outline-none focus:border-[#14532D]"
+                  />
+                  <div className="mt-1 text-[10px] text-stone-500">
+                    Required for staff registration. (Demo code: <span className="font-mono font-bold text-[#14532D]">FACULTY2026</span>)
+                  </div>
+                </Field>
+              )}
 
               <Field label={
                 role === "admin"
