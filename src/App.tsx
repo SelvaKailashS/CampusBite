@@ -24,7 +24,10 @@ const healthFilters: { key: HealthTag; label: string; icon: string }[] = [
 ];
 
 const paymentOptions: { key: PaymentMode; label: string; sub: string; icon: string; kind: "online" | "offline" }[] = [
-  { key: "online-upi", label: "UPI", sub: "GPay, PhonePe, Paytm", icon: "📱", kind: "online" },
+  { key: "online-gpay", label: "Google Pay (GPay)", sub: "9360571671@upi", icon: "🟢", kind: "online" },
+  { key: "online-phonepe", label: "PhonePe", sub: "9360571671@upi", icon: "🟣", kind: "online" },
+  { key: "online-paytm", label: "Paytm UPI", sub: "9360571671@upi", icon: "🔷", kind: "online" },
+  { key: "online-upi", label: "Other UPI / QR Code", sub: "Scan QR code to pay", icon: "📱", kind: "online" },
   { key: "online-card", label: "Card", sub: "Debit / Credit / ATM", icon: "💳", kind: "online" },
   { key: "wallet", label: "Campus Wallet", sub: "Balance ₹450", icon: "🎓", kind: "online" },
   { key: "counter-cash", label: "Pay at Counter", sub: "Cash on pickup", icon: "💵", kind: "offline" },
@@ -148,11 +151,17 @@ export default function App() {
 
   useEffect(() => {
     const t = setInterval(() => {
-      setOrders((prev) => prev.map((o) => {
-        const max = o.mode === "pickup" ? pickupStages.length - 1 : orderStages.length - 1;
-        return o.stage < max ? { ...o, stage: o.stage + 1 } : o;
-      }));
-    }, 5000);
+      setOrders((prev) =>
+        prev.map((o) => {
+          // Auto advance from Stage 0 (Order Confirmed) to Stage 1 (Preparing) after 3s
+          if (o.stage === 0) {
+            return { ...o, stage: 1 };
+          }
+          // Stop at Stage 1 ("Preparing") — Admin must approve & mark ready in Kitchen/Admin view!
+          return o;
+        })
+      );
+    }, 3000);
     return () => clearInterval(t);
   }, []);
 
@@ -1668,21 +1677,37 @@ function Checkout({
             {payment.startsWith("online") && (
               <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Scan QR or Pay via Number</span>
-                  <span className="rounded-full bg-emerald-200/60 px-2 py-0.5 text-[9px] font-bold text-emerald-900">Campus UPI</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+                    {payment === "online-gpay" ? "Google Pay (GPay) Payment"
+                      : payment === "online-phonepe" ? "PhonePe Payment"
+                      : payment === "online-paytm" ? "Paytm Payment"
+                      : "Campus UPI Payment"}
+                  </span>
+                  <span className="rounded-full bg-emerald-200/60 px-2 py-0.5 text-[9px] font-bold text-emerald-900">Official UPI</span>
                 </div>
-                <div className="mt-3 flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-1">
-                    <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${subtotal}&cu=INR`)}`}
-                      alt="CampusBite UPI QR Code"
-                      className="h-full w-full object-contain"
-                    />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">GPay / PhonePe / Paytm</div>
-                    <div className="font-mono text-base font-extrabold text-[#0B1F16]">📞 9360571671</div>
-                    <div className="text-[11px] text-emerald-800 font-bold">UPI ID: <span className="font-mono">9360571671@upi</span></div>
+
+                <div className="mt-3 space-y-3">
+                  {/* Direct Launch App Button */}
+                  <a
+                    href={`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${subtotal}&cu=INR`}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#14532D] py-2.5 text-xs font-bold text-white shadow-md hover:bg-[#0F3E22] transition"
+                  >
+                    <span>📱</span> Open {payment === "online-gpay" ? "Google Pay" : payment === "online-phonepe" ? "PhonePe" : payment === "online-paytm" ? "Paytm" : "UPI App"} & Pay ₹{subtotal} →
+                  </a>
+
+                  <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-1">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${subtotal}&cu=INR`)}`}
+                        alt="CampusBite UPI QR Code"
+                        className="h-full w-full object-contain"
+                      />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">UPI Phone Number</div>
+                      <div className="font-mono text-base font-extrabold text-[#0B1F16]">📞 9360571671</div>
+                      <div className="text-[11px] text-emerald-800 font-bold">UPI ID: <span className="font-mono">9360571671@upi</span></div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4078,18 +4103,27 @@ function WalletTopUpModal({
                 <span className="rounded-full bg-emerald-200/60 px-2 py-0.5 text-[9px] font-bold text-emerald-900">Official UPI</span>
               </div>
               
-              <div className="mt-3 flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
-                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-1">
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${finalAmount}&cu=INR`)}`}
-                    alt="CampusBite UPI QR Code"
-                    className="h-full w-full object-contain"
-                  />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Pay via Phone Number</div>
-                  <div className="font-mono text-base font-extrabold text-[#0B1F16]">📞 9360571671</div>
-                  <div className="text-[11px] text-emerald-800 font-bold">UPI ID: <span className="font-mono">9360571671@upi</span></div>
+              <div className="mt-3 space-y-3">
+                <a
+                  href={`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${finalAmount}&cu=INR`}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#14532D] py-2.5 text-xs font-bold text-white shadow-md hover:bg-[#0F3E22] transition"
+                >
+                  <span>📱</span> Open UPI App & Pay ₹{finalAmount} →
+                </a>
+
+                <div className="flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-1">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${finalAmount}&cu=INR`)}`}
+                      alt="CampusBite UPI QR Code"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Pay via Phone Number</div>
+                    <div className="font-mono text-base font-extrabold text-[#0B1F16]">📞 9360571671</div>
+                    <div className="text-[11px] text-emerald-800 font-bold">UPI ID: <span className="font-mono">9360571671@upi</span></div>
+                  </div>
                 </div>
               </div>
             </div>

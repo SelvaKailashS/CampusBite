@@ -11,7 +11,7 @@ export type HealthTag =
   | "jain";
 
 export type OrderMode = "pickup" | "delivery";
-export type PaymentMode = "online-upi" | "online-card" | "wallet" | "counter-cash";
+export type PaymentMode = "online-gpay" | "online-phonepe" | "online-paytm" | "online-upi" | "online-card" | "wallet" | "counter-cash";
 export type PaymentStatus = "paid" | "pending";
 
 export interface Canteen {
