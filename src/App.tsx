@@ -4399,17 +4399,15 @@ function AdminDashboard({
   broadcast?: any;
   setBroadcast?: any;
 }) {
-  const [showAllOutlets, setShowAllOutlets] = useState(false);
+  // Scope: if user.canteenId is set, this admin is strictly scoped to ONE canteen only
+  const scopedCanteenId = user.canteenId;
+  const scopedCanteen = scopedCanteenId ? canteens.find((c) => c.id === scopedCanteenId) : null;
+  const isSuperAdmin = !scopedCanteenId;
 
-  // Effective scope — toggle between single canteen and all canteens
-  const effectiveCanteenId = showAllOutlets ? null : user.canteenId;
-  const scopedCanteen = user.canteenId ? canteens.find((c) => c.id === user.canteenId) : null;
-  const isSuperAdmin = !effectiveCanteenId;
-
-  // Visible data — filtered by effective scope
-  const visibleCanteens = effectiveCanteenId ? canteens.filter((c) => c.id === effectiveCanteenId) : canteens;
-  const visibleOrders = effectiveCanteenId ? orders.filter((o) => o.canteenId === effectiveCanteenId) : orders;
-  const visibleFoods = effectiveCanteenId ? foods.filter((f) => f.canteenId === effectiveCanteenId) : foods;
+  // Visible data — strictly filtered by canteen scope for outlet admins, or all outlets for Super Admin
+  const visibleCanteens = scopedCanteenId ? canteens.filter((c) => c.id === scopedCanteenId) : canteens;
+  const visibleOrders = scopedCanteenId ? orders.filter((o) => o.canteenId === scopedCanteenId) : orders;
+  const visibleFoods = scopedCanteenId ? foods.filter((f) => f.canteenId === scopedCanteenId) : foods;
 
   // Dynamic student list calculated from live orders + dummy fallback
   const dynamicStudents = useMemo(() => {
@@ -4612,18 +4610,14 @@ function AdminDashboard({
               🛡 {isSuperAdmin ? "Super Admin" : "Canteen Admin"} · {user.name}
             </div>
             {scopedCanteen && (
-              <div className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur">
+              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur">
                 <div className="h-6 w-6 shrink-0 overflow-hidden rounded-md bg-stone-100">
                   <img src={scopedCanteen.logo} alt="" className="h-full w-full object-cover" />
                 </div>
                 Managing: {scopedCanteen.name}
-                <button
-                  type="button"
-                  onClick={() => setShowAllOutlets((s) => !s)}
-                  className="ml-1 rounded-full border border-lime-400/50 bg-lime-400/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-lime-200 hover:bg-lime-400/30 transition cursor-pointer"
-                >
-                  {showAllOutlets ? "📍 Only My Canteen" : "🌐 View All Outlets"}
-                </button>
+                <span className="ml-1 rounded-full bg-lime-400/20 px-2 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-lime-200">
+                  Private Outlet View
+                </span>
               </div>
             )}
             <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
