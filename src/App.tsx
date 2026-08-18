@@ -494,7 +494,24 @@ export default function App() {
                 </button>
               </div>
             )}
-            {/* Profile chip */}
+            {!isAdmin && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className="group relative flex items-center gap-2 rounded-full bg-[#0B1F16] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-950/20 transition hover:bg-[#14532D] cursor-pointer"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+                </svg>
+                <span className="hidden sm:inline">Cart</span>
+                {cartQty > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FCECC5] px-1 font-mono text-[10px] font-bold text-[#0B1F16]">
+                    {cartQty}
+                  </span>
+                )}
+              </button>
+            )}
+
+            {/* Profile chip — placed at far right */}
             <ProfileMenu
               user={user}
               totalOrdersCount={orders.length}
@@ -512,25 +529,9 @@ export default function App() {
               onViewOrders={() => setView("orders")}
             />
 
-            {!isAdmin && (
-            <button
-              onClick={() => setCartOpen(true)}
-              className="group relative flex items-center gap-2 rounded-full bg-[#0B1F16] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-green-950/20 transition hover:bg-[#14532D]"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-              </svg>
-              <span className="hidden sm:inline">Cart</span>
-              {cartQty > 0 && (
-                <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-[#FCECC5] px-1 font-mono text-[10px] font-bold text-[#0B1F16]">
-                  {cartQty}
-                </span>
-              )}
-            </button>
-            )}
             <button
               onClick={() => setMobileMenu((m) => !m)}
-              className="rounded-full border border-stone-900/15 p-2.5 lg:hidden"
+              className="rounded-full border border-stone-900/15 p-2.5 lg:hidden cursor-pointer"
               aria-label="Menu"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -538,12 +539,29 @@ export default function App() {
           </div>
         </div>
         {mobileMenu && (
-          <div className="border-t border-stone-900/10 bg-white p-4 lg:hidden">
+          <div className="border-t border-stone-900/10 bg-white p-4 lg:hidden space-y-3">
+            {/* Mobile Profile & Orders Card */}
+            <div className="rounded-2xl border border-stone-200 bg-[#F6F2EA] p-3.5 flex items-center justify-between">
+              <div>
+                <div className="text-xs font-bold text-stone-900">{user.name}</div>
+                <div className="text-[10px] text-stone-500">{user.dept} · {user.year}</div>
+                <div className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-[#14532D] px-2 py-0.5 font-mono text-[10px] font-bold text-[#FCECC5]">
+                  🎟️ {orders.length} {orders.length === 1 ? "Order" : "Orders"} Made
+                </div>
+              </div>
+              <button
+                onClick={() => { setMobileMenu(false); setTopUpOpen(true); }}
+                className="rounded-xl bg-[#14532D] px-3 py-1.5 text-[11px] font-bold text-white shadow-sm"
+              >
+                ₹{walletBalance} +
+              </button>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <NavBtn onClick={() => { setView("home"); scrollTo(menuSectionRef); }}>Menu</NavBtn>
               <NavBtn onClick={() => { setView("home"); setTimeout(() => scrollTo(canteenSectionRef), 20); }}>Canteens</NavBtn>
               <NavBtn onClick={() => { setConciergeOpen(true); setMobileMenu(false); }}>Concierge</NavBtn>
-              <NavBtn onClick={() => { setView("orders"); setMobileMenu(false); }}>Tokens</NavBtn>
+              <NavBtn onClick={() => { setView("orders"); setMobileMenu(false); }}>Tokens ({orders.length})</NavBtn>
               <NavBtn onClick={() => { setView("kitchen"); setMobileMenu(false); }}>Kitchen</NavBtn>
               <NavBtn onClick={() => { setView("home"); setTimeout(() => scrollTo(compareRef), 20); }}>Compare</NavBtn>
             </div>
