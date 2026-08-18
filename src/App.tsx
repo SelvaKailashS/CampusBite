@@ -2790,6 +2790,37 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
     }
   };
 
+  const handleDemoLogin = async (demoEmail: string, demoRole: Role, fallbackUser: User) => {
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: demoEmail, password: "demo", role: demoRole, mode: "login" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.token) {
+        localStorage.setItem("campusbite_token", data.token);
+        onLogin({
+          name: data.user.name || fallbackUser.name,
+          email: data.user.email,
+          dept: data.user.dept || fallbackUser.dept,
+          year: data.user.year || fallbackUser.year,
+          role: data.user.role === "super_admin" ? "admin" : data.user.role,
+          canteenId: data.user.canteenId || fallbackUser.canteenId,
+          cabin: fallbackUser.cabin,
+        });
+      } else {
+        onLogin(fallbackUser);
+      }
+    } catch {
+      onLogin(fallbackUser);
+    } finally {
+      setLoading(false);
+    }
+  };
+
 
 
   return (
@@ -3139,7 +3170,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
             <div className="grid gap-2">
               <button
                 type="button"
-                onClick={() => onLogin({ name: "Selva Kailash", roll: "721422104001", email: "selva@niet.ac.in", dept: "CSE", year: "3rd Year", role: "student" })}
+                onClick={() => handleDemoLogin("selva@niet.ac.in", "student", { name: "Selva Kailash", roll: "721422104001", email: "selva@niet.ac.in", dept: "CSE", year: "3rd Year", role: "student" })}
                 className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3 text-left hover:border-[#14532D] hover:bg-stone-50 transition cursor-pointer"
               >
                 <span className="flex items-center gap-2.5 text-xs font-bold text-stone-800">
@@ -3150,7 +3181,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
 
               <button
                 type="button"
-                onClick={() => onLogin({ name: "Prof. Rajesh Kumar", roll: "FAC-CSE-012", email: "rajesh.cse@niet.ac.in", dept: "CSE Dept", year: "Assistant Professor", role: "staff", cabin: "Block A · Cabin A-204" })}
+                onClick={() => handleDemoLogin("rajesh.cse@niet.ac.in", "staff", { name: "Prof. Rajesh Kumar", roll: "FAC-CSE-012", email: "rajesh.cse@niet.ac.in", dept: "CSE Dept", year: "Assistant Professor", role: "staff", cabin: "Block A · Cabin A-204" })}
                 className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3 text-left hover:border-emerald-400 hover:bg-emerald-100/60 transition cursor-pointer"
               >
                 <span className="flex items-center gap-2.5 text-xs font-bold text-emerald-950">
@@ -3161,7 +3192,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
 
               <button
                 type="button"
-                onClick={() => onLogin({ name: "Spicy Canteen Manager", email: "admin.spicy@niet.ac.in", dept: "Canteen Operations", year: "Staff", role: "admin", canteenId: "spicy" })}
+                onClick={() => handleDemoLogin("admin.spicy@niet.ac.in", "admin", { name: "Spicy Canteen Manager", email: "admin.spicy@niet.ac.in", dept: "Canteen Operations", year: "Staff", role: "admin", canteenId: "spicy" })}
                 className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/60 p-3 text-left hover:border-amber-400 hover:bg-amber-100/60 transition cursor-pointer"
               >
                 <span className="flex items-center gap-2.5 text-xs font-bold text-amber-950">
