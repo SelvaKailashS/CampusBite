@@ -146,6 +146,73 @@ function exportSalesCSV(orders: Order[], canteens: Canteen[]) {
   document.body.removeChild(link);
 }
 
+// Web Audio chime + Speech Synthesizer for Token Ready callouts
+function announceTokenReady(token: string, canteenName?: string) {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    const osc1 = ctx.createOscillator();
+    const osc2 = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc1.type = "sine";
+    osc1.frequency.setValueAtTime(523.25, now);
+    osc1.frequency.exponentialRampToValueAtTime(659.25, now + 0.15);
+
+    osc2.type = "sine";
+    osc2.frequency.setValueAtTime(659.25, now + 0.15);
+    osc2.frequency.exponentialRampToValueAtTime(783.99, now + 0.35);
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+    osc1.connect(gain);
+    osc2.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc1.start(now);
+    osc1.stop(now + 0.2);
+    osc2.start(now + 0.15);
+    osc2.stop(now + 0.5);
+
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const spokenToken = token.split("").join(" ");
+      const text = canteenName
+        ? `Token number ${spokenToken} is ready for pickup at ${canteenName}!`
+        : `Token number ${spokenToken} is ready for pickup!`;
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.95;
+      utterance.pitch = 1.05;
+      window.speechSynthesis.speak(utterance);
+    }
+  } catch (e) {
+    console.error("Audio callout failed", e);
+  }
+}
+
+// Live Queue & Rush Hour Estimator
+function getCanteenRushInfo(canteen: Canteen, orders: Order[]) {
+  const activeCount = orders.filter(
+    (o) => o.canteenId === canteen.id && o.stage < (o.mode === "pickup" ? pickupStages.length - 1 : orderStages.length - 1)
+  ).length;
+  const liveWaitMin = canteen.waitMin + activeCount * 2;
+  const liveWaitMax = canteen.waitMax + activeCount * 3;
+
+  let rushLabel = "🟢 LOW QUEUE";
+  let rushBg = "bg-emerald-100 text-emerald-900 border-emerald-300";
+
+  if (activeCount >= 5) {
+    rushLabel = "⚡⚡ PEAK RUSH HOUR";
+    rushBg = "bg-rose-100 text-rose-900 border-rose-300 animate-pulse";
+  } else if (activeCount >= 2) {
+    rushLabel = "⚡ MODERATE QUEUE";
+    rushBg = "bg-amber-100 text-amber-900 border-amber-300";
+  }
+
+  return { activeCount, liveWaitMin, liveWaitMax, rushLabel, rushBg };
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
@@ -212,6 +279,38 @@ export default function App() {
       return [];
     }
   });
+
+  const [broadcast, setBroadcast] = useState<{
+    id: string;
+    message: string;
+    bannerType: "discount" | "info" | "alert";
+    active: boolean;
+    canteenName?: string;
+    timestamp: string;
+  } | null>(() => {
+    try {
+      const saved = localStorage.getItem("campusbite_broadcast");
+      return saved ? JSON.parse(saved) : {
+        id: "b-1",
+        message: "🎉 Campus Flash Sale: 20% OFF All Cold Coffees & Beverages at Nescafe Bar until 5 PM!",
+        bannerType: "discount",
+        active: true,
+        canteenName: "Nescafe Corner",
+        timestamp: new Date().toISOString(),
+      };
+    } catch {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      if (broadcast) localStorage.setItem("campusbite_broadcast", JSON.stringify(broadcast));
+      else localStorage.removeItem("campusbite_broadcast");
+    } catch (e) {
+      console.error("Failed to save broadcast to localStorage", e);
+    }
+  }, [broadcast]);
 
   // Save orders to localStorage whenever orders list changes
   useEffect(() => {
@@ -755,6 +854,40 @@ export default function App() {
         )}
       </header>
 
+      {/* Live Campus Broadcast & Flash Sales Banner */}
+      {broadcast && broadcast.active && (
+        <div className={
+          "border-b text-xs font-bold transition shadow-sm " +
+          (broadcast.bannerType === "discount"
+            ? "bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-stone-950 border-amber-400"
+            : broadcast.bannerType === "alert"
+            ? "bg-gradient-to-r from-rose-600 via-rose-500 to-rose-600 text-white border-rose-500"
+            : "bg-gradient-to-r from-[#14532D] via-[#1b683a] to-[#14532D] text-white border-emerald-600")
+        }>
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-3 px-6 py-2.5">
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/20 text-sm animate-bounce">
+                📢
+              </span>
+              <span className="truncate">{broadcast.message}</span>
+              {broadcast.canteenName && (
+                <span className="hidden sm:inline rounded-full bg-black/15 px-2.5 py-0.5 font-mono text-[10px] uppercase font-black">
+                  {broadcast.canteenName}
+                </span>
+              )}
+            </div>
+            {isAdmin && (
+              <button
+                onClick={() => { setView("admin"); setActiveAdminTab("broadcast"); }}
+                className="rounded-full bg-black/20 px-3 py-1 text-[10px] font-extrabold uppercase hover:bg-black/30 transition cursor-pointer"
+              >
+                Manage Broadcast →
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Admin preview banner — shows when an admin is viewing student-facing pages */}
       {isAdmin && view !== "admin" && view !== "kitchen" && (
         <div className="border-b border-[#D64545]/20 bg-gradient-to-r from-[#FCECC5] via-[#F5DE97] to-[#FCECC5]">
@@ -786,6 +919,8 @@ export default function App() {
           onPreviewCanteen={(id) => { setSelectedCanteenId(id); setView("home"); }}
           activeTab={activeAdminTab}
           setActiveTab={setActiveAdminTab}
+          broadcast={broadcast}
+          setBroadcast={setBroadcast}
         />
       ) : view === "kitchen" ? (
         <KitchenPortal orders={orders} setOrders={setOrders} pushToast={pushToast} user={user} />
@@ -990,6 +1125,7 @@ export default function App() {
                   key={c.id}
                   canteen={c}
                   selected={c.id === selectedCanteenId}
+                  orders={orders}
                   onSelect={() => {
                     setSelectedCanteenId(c.id);
                     pushToast(`Now browsing ${c.name}`, "info");
@@ -1433,8 +1569,10 @@ function StatusPill({ status }: { status: Canteen["status"] }) {
   );
 }
 
-function CanteenCard({ canteen, selected, onSelect }: { canteen: Canteen; selected: boolean; onSelect: () => void; }) {
+function CanteenCard({ canteen, selected, onSelect, orders = [] }: { canteen: Canteen; selected: boolean; onSelect: () => void; orders?: Order[]; }) {
   const idx = canteens.findIndex((c) => c.id === canteen.id) + 1;
+  const rush = getCanteenRushInfo(canteen, orders);
+
   return (
     <button
       onClick={onSelect}
@@ -1471,24 +1609,39 @@ function CanteenCard({ canteen, selected, onSelect }: { canteen: Canteen; select
 
       {/* Content */}
       <div className="flex flex-1 flex-col p-6">
-        <h4 className="text-2xl font-bold leading-tight tracking-tight">{canteen.name}</h4>
-        <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#14532D]">
-          📍 {canteen.location}
-        </p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="text-2xl font-bold leading-tight tracking-tight">{canteen.name}</h4>
+            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.15em] text-[#14532D]">
+              📍 {canteen.location}
+            </p>
+          </div>
+        </div>
+
         <p className="mt-3 text-sm leading-relaxed text-stone-600">{canteen.tagline}</p>
 
-        <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-stone-100 pt-4 text-xs">
+        {/* Live Wait Time & Surge Indicator Badge */}
+        <div className="mt-4 flex items-center justify-between rounded-2xl bg-stone-50 p-3 border border-stone-200">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[9px] font-black uppercase border ${rush.rushBg}`}>
+            {rush.rushLabel}
+          </span>
+          <span className="font-mono text-xs font-extrabold text-[#14532D]">
+            ~{rush.liveWaitMin}–{rush.liveWaitMax} min wait
+          </span>
+        </div>
+
+        <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-stone-100 pt-3 text-xs">
           <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Ready</dt>
-            <dd className="mt-1 text-lg font-bold">{canteen.waitMin}–{canteen.waitMax}m</dd>
+            <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Live Prep</dt>
+            <dd className="mt-1 text-base font-bold font-mono text-[#14532D]">~{rush.liveWaitMin}m</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Range</dt>
-            <dd className="mt-1 text-lg font-bold">₹{canteen.priceMin}–{canteen.priceMax}</dd>
+            <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Price Range</dt>
+            <dd className="mt-1 text-base font-bold">₹{canteen.priceMin}–{canteen.priceMax}</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Queue</dt>
-            <dd className="mt-1 text-lg font-bold">{canteen.ordersAhead}</dd>
+            <dt className="text-[10px] font-semibold uppercase tracking-[0.15em] text-stone-500">Active Queue</dt>
+            <dd className="mt-1 text-base font-bold font-mono text-amber-900">{rush.activeCount} orders</dd>
           </div>
         </dl>
 
@@ -3605,7 +3758,157 @@ const dummyStudents = [
   { name: "Arjun Nair", roll: "22EEE023", dept: "EEE", year: "3rd Year", spend: 90, orders: 1 },
 ];
 
-type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos" | "security";
+type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos" | "security" | "broadcast";
+
+function AdminBroadcastManager({
+  broadcast,
+  setBroadcast,
+  pushToast,
+}: {
+  broadcast: {
+    id: string;
+    message: string;
+    bannerType: "discount" | "info" | "alert";
+    active: boolean;
+    canteenName?: string;
+    timestamp: string;
+  } | null;
+  setBroadcast: React.Dispatch<React.SetStateAction<any>>;
+  pushToast: (m: string, k?: Toast["kind"]) => void;
+}) {
+  const [msg, setMsg] = useState(broadcast?.message ?? "");
+  const [type, setType] = useState<"discount" | "info" | "alert">(broadcast?.bannerType ?? "discount");
+  const [canteen, setCanteen] = useState(broadcast?.canteenName ?? "");
+
+  const handlePost = () => {
+    if (!msg.trim()) {
+      alert("Please enter a broadcast message.");
+      return;
+    }
+    const newBroadcast = {
+      id: `b-${Date.now()}`,
+      message: msg.trim(),
+      bannerType: type,
+      active: true,
+      canteenName: canteen.trim() || undefined,
+      timestamp: new Date().toISOString(),
+    };
+    setBroadcast(newBroadcast);
+    pushToast("📢 Broadcast live across campus!", "success");
+  };
+
+  const handleClear = () => {
+    setBroadcast(null);
+    setMsg("");
+    pushToast("Broadcast announcement removed.", "info");
+  };
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-stone-900/5">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-100 pb-6">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-amber-100 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.2em] text-amber-900">
+              📢 Campus Announcement Center
+            </div>
+            <h3 className="mt-2 text-2xl sm:text-3xl font-extrabold text-stone-900">
+              Broadcast Alert &amp; Flash Sales Banner
+            </h3>
+            <p className="mt-1 text-xs text-stone-500 max-w-xl">
+              Post real-time flash discount alerts, menu updates, or campus announcements directly to all logged-in students and staff!
+            </p>
+          </div>
+          
+          {broadcast && broadcast.active ? (
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-4 py-3 text-center">
+                <div className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-widest text-emerald-800">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" /> Live Broadcast Active
+                </div>
+                <div className="text-xs font-bold text-stone-800 max-w-[200px] truncate">{broadcast.message}</div>
+              </div>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-xs font-extrabold text-rose-700 hover:bg-rose-100 transition cursor-pointer"
+              >
+                🗑 Stop Broadcast
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs font-bold text-stone-500">
+              No active broadcast
+            </div>
+          )}
+        </div>
+
+        {/* Create Broadcast Form */}
+        <div className="mt-6 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">
+                Banner Type / Color Accent
+              </label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value as any)}
+                className="mt-1.5 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs font-bold outline-none focus:border-[#14532D]"
+              >
+                <option value="discount">🎉 Flash Sale / Discount Deal (Gold Accent)</option>
+                <option value="info">ℹ️ General Announcement (Emerald Accent)</option>
+                <option value="alert">⚠️ Kitchen Alert / Delay Notice (Rose Accent)</option>
+              </select>
+            </div>
+            <div>
+              <label className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">
+                Canteen Name (Optional)
+              </label>
+              <input
+                type="text"
+                value={canteen}
+                onChange={(e) => setCanteen(e.target.value)}
+                placeholder="e.g. Spicy Canteen / All Outlets"
+                className="mt-1.5 w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3 text-xs font-bold outline-none focus:border-[#14532D]"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">
+              Announcement Message
+            </label>
+            <textarea
+              value={msg}
+              onChange={(e) => setMsg(e.target.value)}
+              rows={3}
+              placeholder="e.g. 🎉 20% OFF all Cold Coffees at Nescafe Corner until 4 PM! Claim now."
+              className="mt-1.5 w-full rounded-2xl border border-stone-200 bg-stone-50 p-4 text-sm font-bold outline-none focus:border-[#14532D]"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2">
+            {broadcast && (
+              <button
+                type="button"
+                onClick={handleClear}
+                className="rounded-2xl border border-stone-200 px-6 py-3.5 text-xs font-extrabold text-stone-700 hover:bg-stone-50 transition cursor-pointer"
+              >
+                Clear Live Banner
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handlePost}
+              className="rounded-2xl bg-[#0B1F16] px-8 py-3.5 text-xs font-extrabold text-white shadow-lg hover:bg-[#14532D] transition cursor-pointer"
+            >
+              📢 Post Live Campus Broadcast →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function FacultySecurityManager({ pushToast }: { pushToast: (m: string, k?: Toast["kind"]) => void }) {
   const [code, setCode] = useState(() => localStorage.getItem("campusbite_faculty_code") || "FACULTY2026");
@@ -3692,7 +3995,7 @@ function FacultySecurityManager({ pushToast }: { pushToast: (m: string, k?: Toas
 }
 
 function AdminDashboard({
-  orders, setOrders, user, bumpData, pushToast, onPreviewCanteen, activeTab, setActiveTab,
+  orders, setOrders, user, bumpData, pushToast, onPreviewCanteen, activeTab, setActiveTab, broadcast, setBroadcast,
 }: {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
@@ -3702,6 +4005,8 @@ function AdminDashboard({
   onPreviewCanteen: (id: string) => void;
   activeTab?: AdminTab;
   setActiveTab?: (tab: AdminTab) => void;
+  broadcast?: any;
+  setBroadcast?: any;
 }) {
   // Scope: if user.canteenId is set, this admin is scoped to ONE canteen only
   const scopedCanteenId = user.canteenId;
@@ -3907,6 +4212,7 @@ function AdminDashboard({
           { k: "students" as AdminTab, label: "Students", icon: "🎓" },
           { k: "combos" as AdminTab, label: "Combos", icon: "🎁" },
           { k: "security" as AdminTab, label: "Faculty Passcode", icon: "🔐" },
+          { k: "broadcast" as AdminTab, label: "Announcements", icon: "📢" },
         ]).map((t) => (
           <button
             key={t.k}
@@ -4538,6 +4844,11 @@ function AdminDashboard({
       {/* ========= SECURITY & FACULTY PASSCODE ========= */}
       {tab === "security" && (
         <FacultySecurityManager pushToast={pushToast} />
+      )}
+
+      {/* ========= BROADCAST & ANNOUNCEMENTS ========= */}
+      {tab === "broadcast" && (
+        <AdminBroadcastManager broadcast={broadcast} setBroadcast={setBroadcast} pushToast={pushToast} />
       )}
     </main>
   );
