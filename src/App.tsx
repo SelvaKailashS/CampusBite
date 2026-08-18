@@ -3479,7 +3479,91 @@ const dummyStudents = [
   { name: "Arjun Nair", roll: "22EEE023", dept: "EEE", year: "3rd Year", spend: 90, orders: 1 },
 ];
 
-type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos";
+type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos" | "security";
+
+function FacultySecurityManager({ pushToast }: { pushToast: (m: string, k?: Toast["kind"]) => void }) {
+  const [code, setCode] = useState(() => localStorage.getItem("campusbite_faculty_code") || "FACULTY2026");
+  const [inputCode, setInputCode] = useState(code);
+  const [copied, setCopied] = useState(false);
+
+  const handleSave = () => {
+    const trimmed = inputCode.trim().toUpperCase();
+    if (!trimmed) {
+      alert("Verification Code cannot be empty.");
+      return;
+    }
+    localStorage.setItem("campusbite_faculty_code", trimmed);
+    setCode(trimmed);
+    pushToast(`Faculty Verification Code updated to: ${trimmed}`, "success");
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    pushToast("Faculty Passcode copied to clipboard!", "info");
+    setTimeout(() => setCopied(false), 2500);
+  };
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="rounded-3xl bg-white p-6 sm:p-8 shadow-sm ring-1 ring-stone-900/5">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-stone-100 pb-6">
+          <div>
+            <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">
+              🔐 Staff Security &amp; Authentication
+            </div>
+            <h3 className="mt-2 text-2xl sm:text-3xl font-extrabold text-stone-900">
+              Faculty Verification Code Manager
+            </h3>
+            <p className="mt-1 text-xs text-stone-500 max-w-xl">
+              Professors and staff members enter this code when registering their account on the Faculty/Staff tab. Only authorized faculty with this code or <code className="font-bold text-[#14532D]">@niet.ac.in</code> email can register.
+            </p>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 px-5 py-3 text-center shadow-inner">
+              <div className="text-[9px] font-extrabold uppercase tracking-widest text-emerald-800">Active Faculty Code</div>
+              <div className="font-mono text-2xl font-black text-[#0B1F16]">{code}</div>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="rounded-2xl bg-[#14532D] px-4 py-4 text-xs font-extrabold text-[#FCECC5] shadow-md hover:bg-[#0F3E22] transition cursor-pointer"
+            >
+              {copied ? "✓ Copied!" : "📋 Copy Code"}
+            </button>
+          </div>
+        </div>
+
+        {/* Change Code Form */}
+        <div className="mt-6 grid gap-6 md:grid-cols-2 items-end">
+          <div className="space-y-2">
+            <label className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">
+              Assign New Verification Passcode
+            </label>
+            <input
+              type="text"
+              value={inputCode}
+              onChange={(e) => setInputCode(e.target.value)}
+              placeholder="e.g. NIET_FAC_2026"
+              className="w-full rounded-2xl border border-stone-200 bg-stone-50 px-4 py-3.5 font-mono text-sm font-bold uppercase outline-none focus:border-[#14532D] focus:bg-white"
+            />
+          </div>
+
+          <div>
+            <button
+              type="button"
+              onClick={handleSave}
+              className="w-full rounded-2xl bg-[#0B1F16] py-3.5 text-xs font-extrabold text-white shadow-lg hover:bg-[#14532D] transition cursor-pointer"
+            >
+              🔒 Assign &amp; Save New Passcode →
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function AdminDashboard({
   orders, setOrders, user, bumpData, pushToast, onPreviewCanteen,
@@ -3687,6 +3771,7 @@ function AdminDashboard({
           { k: "orders" as AdminTab, label: "Orders", icon: "📦" },
           { k: "students" as AdminTab, label: "Students", icon: "🎓" },
           { k: "combos" as AdminTab, label: "Combos", icon: "🎁" },
+          { k: "security" as AdminTab, label: "Faculty Passcode", icon: "🔐" },
         ]).map((t) => (
           <button
             key={t.k}
@@ -4270,6 +4355,11 @@ function AdminDashboard({
             ))}
           </div>
         </div>
+      )}
+
+      {/* ========= SECURITY & FACULTY PASSCODE ========= */}
+      {tab === "security" && (
+        <FacultySecurityManager pushToast={pushToast} />
       )}
     </main>
   );
