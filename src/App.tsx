@@ -194,6 +194,8 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [conciergeOpen, setConciergeOpen] = useState(false);
   const [view, setView] = useState<ActiveView>("home");
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>("overview");
+  const [qrScannerModalOpen, setQrScannerModalOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
   const [location, setLocation] = useState<DeliveryLocation>({ block: "Block A", room: "A-304", row: 3, desk: 12 });
   const [orderMode, setOrderMode] = useState<OrderMode>("pickup");
@@ -706,6 +708,11 @@ export default function App() {
               }}
               onOpenWallet={() => setTopUpOpen(true)}
               onViewOrders={() => setView("orders")}
+              onNavigateAdmin={(v, t) => {
+                setView(v);
+                if (t) setActiveAdminTab(t);
+              }}
+              onOpenQRScanner={() => setQrScannerModalOpen(true)}
             />
 
             <button
@@ -777,6 +784,8 @@ export default function App() {
           bumpData={bumpData}
           pushToast={pushToast}
           onPreviewCanteen={(id) => { setSelectedCanteenId(id); setView("home"); }}
+          activeTab={activeAdminTab}
+          setActiveTab={setActiveAdminTab}
         />
       ) : view === "kitchen" ? (
         <KitchenPortal orders={orders} setOrders={setOrders} pushToast={pushToast} user={user} />
@@ -1351,6 +1360,22 @@ export default function App() {
         balance={walletBalance}
         onTopUp={handleTopUp}
       />
+
+      {qrScannerModalOpen && (
+        <QRScannerModal
+          orders={orders}
+          onCollectOrder={(id) => {
+            const target = orders.find((o) => o.id === id);
+            if (target) {
+              const max = target.mode === "pickup" ? pickupStages.length - 1 : orderStages.length - 1;
+              target.stage = max;
+              bumpData();
+              pushToast(`Token ${target.token} marked as COLLECTED 🎉`);
+            }
+          }}
+          onClose={() => setQrScannerModalOpen(false)}
+        />
+      )}
 
 
 
@@ -2437,6 +2462,8 @@ function ProfileMenu({
   onLogout,
   onOpenWallet,
   onViewOrders,
+  onNavigateAdmin,
+  onOpenQRScanner,
 }: {
   user: User;
   totalOrdersCount?: number;
@@ -2445,6 +2472,8 @@ function ProfileMenu({
   onLogout: () => void;
   onOpenWallet?: () => void;
   onViewOrders?: () => void;
+  onNavigateAdmin?: (view: ActiveView, tab?: AdminTab) => void;
+  onOpenQRScanner?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -2469,7 +2498,9 @@ function ProfileMenu({
         </span>
         <div className="hidden text-left sm:block">
           <div className="max-w-[90px] truncate text-[12px] font-bold leading-tight text-stone-900">{user.name.split(" ")[0]}</div>
-          <div className="text-[9px] font-semibold text-emerald-800">{totalOrdersCount} orders</div>
+          <div className="text-[9px] font-semibold text-emerald-800">
+            {user.role === "admin" ? (scopedCanteen ? scopedCanteen.name : "Super Admin") : `${totalOrdersCount} orders`}
+          </div>
         </div>
       </button>
 
@@ -2477,99 +2508,194 @@ function ProfileMenu({
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl animate-fade-in">
-            {/* Header pass */}
-            <div className="relative overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0F3E22] p-4 text-white">
-              <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-lime-400/20 blur-xl" />
-              
-              <div className="flex items-center justify-between">
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-lime-300 backdrop-blur">
-                  <span className="h-1.5 w-1.5 rounded-full bg-lime-400 animate-pulse" /> Verified Student
-                </span>
-                <span className="text-[10px] font-mono font-bold text-[#FCECC5]">{dinerTier}</span>
-              </div>
+            {/* Header pass — Admin vs Student */}
+            {user.role === "admin" ? (
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0F3E22] p-4 text-white">
+                <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-[#FCECC5]/20 blur-xl" />
+                
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-lime-400/20 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-lime-200 border border-lime-400/30 backdrop-blur">
+                    <span className="h-1.5 w-1.5 rounded-full bg-lime-300 animate-pulse" />
+                    {isSuperAdmin ? "Super Admin 🛡️" : "Canteen Manager 🛡️"}
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-[#FCECC5]">Command Center</span>
+                </div>
 
-              <div className="mt-3 flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FCECC5] text-lg font-black text-[#0B1F16] shadow-md ring-2 ring-white/20">
-                  {initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-base font-bold text-white">{user.name}</div>
-                  <div className="truncate text-[11px] text-white/70">{user.email}</div>
-                  <div className="mt-0.5 text-[10px] font-semibold text-lime-200/90">{user.dept || "Student"} · {user.year || "NIET"}</div>
-                </div>
-              </div>
-
-              {/* Quick stats row */}
-              <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-white/15 pt-3 text-center">
-                <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Total Orders</div>
-                  <div className="font-mono text-base font-extrabold text-[#FCECC5]">{totalOrdersCount}</div>
-                </div>
-                <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
-                  <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Campus Wallet</div>
-                  <div className="font-mono text-base font-extrabold text-white">₹{walletBalance}</div>
-                </div>
-              </div>
-
-              {scopedCanteen && (
-                <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 p-2 backdrop-blur">
-                  <div className="h-7 w-7 shrink-0 overflow-hidden rounded-lg bg-stone-100">
-                    <img src={scopedCanteen.logo} alt="" className="h-full w-full object-cover" />
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FCECC5] text-lg font-black text-[#0B1F16] shadow-md ring-2 ring-white/20">
+                    {initials}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-bold uppercase tracking-[0.15em] text-lime-300">Managed Canteen</div>
-                    <div className="truncate text-[11px] font-bold text-white">{scopedCanteen.name}</div>
+                    <div className="truncate text-base font-bold text-white">{user.name}</div>
+                    <div className="truncate text-[11px] font-bold text-lime-200">{scopedCanteen ? scopedCanteen.name : "All 4 Campus Outlets"}</div>
+                    <div className="truncate text-[10px] text-white/70">{user.email}</div>
                   </div>
                 </div>
-              )}
-            </div>
 
-            <div className="p-2 text-sm space-y-1">
-              <button
-                onClick={() => { setOpen(false); setShowProfileModal(true); }}
-                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 text-xs">👤</span>
-                  <span>My Student Profile &amp; Pass</span>
-                </span>
-                <span className="rounded-full bg-[#14532D] px-2 py-0.5 text-[9px] font-bold text-[#FCECC5]">PASS</span>
-              </button>
+                <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-white/15 pt-3 text-center">
+                  <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Active Queue</div>
+                    <div className="font-mono text-base font-extrabold text-[#FCECC5]">{activeOrdersCount}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Total Orders</div>
+                    <div className="font-mono text-base font-extrabold text-white">{totalOrdersCount}</div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="relative overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0F3E22] p-4 text-white">
+                <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-lime-400/20 blur-xl" />
+                
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-lime-300 backdrop-blur">
+                    <span className="h-1.5 w-1.5 rounded-full bg-lime-400 animate-pulse" /> Verified Student
+                  </span>
+                  <span className="text-[10px] font-mono font-bold text-[#FCECC5]">{dinerTier}</span>
+                </div>
 
-              <button
-                onClick={() => { setOpen(false); if (onViewOrders) onViewOrders(); }}
-                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-800 text-xs">🎟️</span>
-                  <span>My Tokens &amp; History</span>
-                </span>
-                <span className="rounded-full bg-stone-100 px-2 py-0.5 font-mono text-[11px] font-bold text-stone-800">
-                  {totalOrdersCount}
-                </span>
-              </button>
+                <div className="mt-3 flex items-center gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FCECC5] text-lg font-black text-[#0B1F16] shadow-md ring-2 ring-white/20">
+                    {initials}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-base font-bold text-white">{user.name}</div>
+                    <div className="truncate text-[11px] text-white/70">{user.email}</div>
+                    <div className="mt-0.5 text-[10px] font-semibold text-lime-200/90">{user.dept || "Student"} · {user.year || "NIET"}</div>
+                  </div>
+                </div>
 
-              <button
-                onClick={() => { setOpen(false); if (onOpenWallet) onOpenWallet(); }}
-                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 text-cyan-800 text-xs">💳</span>
-                  <span>Top Up Wallet (UPI)</span>
-                </span>
-                <span className="font-mono text-xs font-extrabold text-[#14532D]">₹{walletBalance}</span>
-              </button>
+                <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-white/15 pt-3 text-center">
+                  <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Total Orders</div>
+                    <div className="font-mono text-base font-extrabold text-[#FCECC5]">{totalOrdersCount}</div>
+                  </div>
+                  <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Campus Wallet</div>
+                    <div className="font-mono text-base font-extrabold text-white">₹{walletBalance}</div>
+                  </div>
+                </div>
+              </div>
+            )}
 
-              <div className="my-1 h-px bg-stone-100" />
+            {/* Dropdown Items — Admin vs Student */}
+            {user.role === "admin" ? (
+              <div className="p-2 text-sm space-y-1">
+                <button
+                  onClick={() => { setOpen(false); if (onNavigateAdmin) onNavigateAdmin("admin", "overview"); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 text-xs">🛡️</span>
+                    <span>Admin Dashboard</span>
+                  </span>
+                  <span className="rounded-full bg-[#14532D] px-2 py-0.5 text-[9px] font-bold text-[#FCECC5]">KPIS</span>
+                </button>
 
-              <button
-                onClick={() => { setOpen(false); onLogout(); }}
-                className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left font-bold text-[#D64545] hover:bg-rose-50 transition cursor-pointer"
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-700 text-xs">↪</span>
-                <span>Sign Out</span>
-              </button>
-            </div>
+                <button
+                  onClick={() => { setOpen(false); if (onNavigateAdmin) onNavigateAdmin("admin", "analytics"); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-800 text-xs">📊</span>
+                    <span>Sales Analytics &amp; CSV Export</span>
+                  </span>
+                  <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-bold text-amber-900">REPORTS</span>
+                </button>
+
+                <button
+                  onClick={() => { setOpen(false); if (onNavigateAdmin) onNavigateAdmin("kitchen"); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 text-cyan-800 text-xs">🍳</span>
+                    <span>Kitchen Live Queue</span>
+                  </span>
+                  <span className="rounded-full bg-cyan-100 px-2 py-0.5 font-mono text-[11px] font-bold text-cyan-900">
+                    {activeOrdersCount}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => { setOpen(false); if (onOpenQRScanner) onOpenQRScanner(); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-lime-100 text-lime-900 text-xs">📷</span>
+                    <span>Counter Token QR Scanner</span>
+                  </span>
+                  <span className="rounded-full bg-lime-200 px-2 py-0.5 text-[9px] font-bold text-lime-900">SCAN</span>
+                </button>
+
+                <button
+                  onClick={() => { setOpen(false); if (onNavigateAdmin) onNavigateAdmin("admin", "security"); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50 text-purple-800 text-xs">🔐</span>
+                    <span>Faculty Passcode Manager</span>
+                  </span>
+                  <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[9px] font-bold text-purple-900">CODE</span>
+                </button>
+
+                <div className="my-1 h-px bg-stone-100" />
+
+                <button
+                  onClick={() => { setOpen(false); onLogout(); }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left font-bold text-[#D64545] hover:bg-rose-50 transition cursor-pointer"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-700 text-xs">↪</span>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-2 text-sm space-y-1">
+                <button
+                  onClick={() => { setOpen(false); setShowProfileModal(true); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 text-xs">👤</span>
+                    <span>My Student Profile &amp; Pass</span>
+                  </span>
+                  <span className="rounded-full bg-[#14532D] px-2 py-0.5 text-[9px] font-bold text-[#FCECC5]">PASS</span>
+                </button>
+
+                <button
+                  onClick={() => { setOpen(false); if (onViewOrders) onViewOrders(); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-800 text-xs">🎟️</span>
+                    <span>My Tokens &amp; History</span>
+                  </span>
+                  <span className="rounded-full bg-stone-100 px-2 py-0.5 font-mono text-[11px] font-bold text-stone-800">
+                    {totalOrdersCount}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => { setOpen(false); if (onOpenWallet) onOpenWallet(); }}
+                  className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
+                >
+                  <span className="flex items-center gap-2.5">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 text-cyan-800 text-xs">💳</span>
+                    <span>Top Up Wallet (UPI)</span>
+                  </span>
+                  <span className="font-mono text-xs font-extrabold text-[#14532D]">₹{walletBalance}</span>
+                </button>
+
+                <div className="my-1 h-px bg-stone-100" />
+
+                <button
+                  onClick={() => { setOpen(false); onLogout(); }}
+                  className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left font-bold text-[#D64545] hover:bg-rose-50 transition cursor-pointer"
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-700 text-xs">↪</span>
+                  <span>Sign Out</span>
+                </button>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -3566,7 +3692,7 @@ function FacultySecurityManager({ pushToast }: { pushToast: (m: string, k?: Toas
 }
 
 function AdminDashboard({
-  orders, setOrders, user, bumpData, pushToast, onPreviewCanteen,
+  orders, setOrders, user, bumpData, pushToast, onPreviewCanteen, activeTab, setActiveTab,
 }: {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
@@ -3574,6 +3700,8 @@ function AdminDashboard({
   bumpData: () => void;
   pushToast: (m: string, k?: Toast["kind"]) => void;
   onPreviewCanteen: (id: string) => void;
+  activeTab?: AdminTab;
+  setActiveTab?: (tab: AdminTab) => void;
 }) {
   // Scope: if user.canteenId is set, this admin is scoped to ONE canteen only
   const scopedCanteenId = user.canteenId;
@@ -3585,7 +3713,12 @@ function AdminDashboard({
   const visibleOrders = scopedCanteenId ? orders.filter((o) => o.canteenId === scopedCanteenId) : orders;
   const visibleFoods = scopedCanteenId ? foods.filter((f) => f.canteenId === scopedCanteenId) : foods;
 
-  const [tab, setTab] = useState<AdminTab>("overview");
+  const [localTab, setLocalTab] = useState<AdminTab>("overview");
+  const tab = activeTab ?? localTab;
+  const setTab = (t: AdminTab) => {
+    setLocalTab(t);
+    if (setActiveTab) setActiveTab(t);
+  };
   const [orderFilter, setOrderFilter] = useState<string>("all");
   const [menuFilter, setMenuFilter] = useState<string>(scopedCanteenId ?? "all");
   const [menuSort, setMenuSort] = useState<"default" | "orders" | "revenue">("orders");
