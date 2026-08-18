@@ -2191,166 +2191,257 @@ function ProfileMenu({
   const scopedCanteen = user.role === "admin" && user.canteenId ? canteens.find((c) => c.id === user.canteenId) : null;
   const isSuperAdmin = user.role === "admin" && !user.canteenId;
 
+  // Determine diner tier
+  const dinerTier = totalOrdersCount >= 10 ? "Gold Foodie 🌟" : totalOrdersCount >= 5 ? "Silver Diner 🥈" : "Campus Explorer 🎓";
+
   return (
     <div className="relative">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-2 rounded-full border border-stone-900/10 bg-white py-1.5 pl-1.5 pr-3 text-sm font-semibold text-stone-800 shadow-sm transition hover:border-stone-900/25 cursor-pointer"
+        className="flex items-center gap-2.5 rounded-full border border-stone-900/15 bg-white py-1.5 pl-1.5 pr-3.5 text-sm font-bold text-stone-800 shadow-sm transition hover:border-[#14532D] hover:shadow-md cursor-pointer"
       >
-        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#14532D] text-[11px] font-bold text-[#FCECC5]">
+        <span className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-[#0B1F16] to-[#14532D] text-[11px] font-extrabold text-[#FCECC5] shadow-inner">
           {initials}
+          {activeOrdersCount > 0 && (
+            <span className="absolute -right-0.5 -top-0.5 flex h-3 w-3 items-center justify-center rounded-full bg-[#D64545] text-[8px] font-bold text-white ring-2 ring-white animate-pulse" />
+          )}
         </span>
-        <span className="hidden max-w-[80px] truncate text-[13px] sm:inline">{user.name.split(" ")[0]}</span>
+        <div className="hidden text-left sm:block">
+          <div className="max-w-[90px] truncate text-[12px] font-bold leading-tight text-stone-900">{user.name.split(" ")[0]}</div>
+          <div className="text-[9px] font-semibold text-emerald-800">{totalOrdersCount} orders</div>
+        </div>
       </button>
+
       {open && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-2xl animate-fade-in">
-            <div className="border-b border-stone-100 bg-[#F6F2EA] p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#14532D] text-sm font-bold text-[#FCECC5]">
+          <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-3xl border border-stone-200 bg-white shadow-2xl animate-fade-in">
+            {/* Header pass */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0F3E22] p-4 text-white">
+              <div className="pointer-events-none absolute -right-6 -top-6 h-24 w-24 rounded-full bg-lime-400/20 blur-xl" />
+              
+              <div className="flex items-center justify-between">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-lime-300 backdrop-blur">
+                  <span className="h-1.5 w-1.5 rounded-full bg-lime-400 animate-pulse" /> Verified Student
+                </span>
+                <span className="text-[10px] font-mono font-bold text-[#FCECC5]">{dinerTier}</span>
+              </div>
+
+              <div className="mt-3 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#FCECC5] text-lg font-black text-[#0B1F16] shadow-md ring-2 ring-white/20">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-bold text-stone-900">{user.name}</div>
-                  <div className="truncate text-[11px] text-stone-500">
-                    {user.role === "admin"
-                      ? (isSuperAdmin ? "🛡 Super Admin · College-wide" : "🛡 Canteen Admin")
-                      : `${user.dept} · ${user.year}`}
-                  </div>
+                  <div className="truncate text-base font-bold text-white">{user.name}</div>
+                  <div className="truncate text-[11px] text-white/70">{user.email}</div>
+                  <div className="mt-0.5 text-[10px] font-semibold text-lime-200/90">{user.dept || "Student"} · {user.year || "NIET"}</div>
                 </div>
               </div>
-              <div className="mt-2 truncate text-[11px] text-stone-600">{user.email}</div>
 
-              {/* Total Orders Made Pill */}
-              <div className="mt-3 flex items-center justify-between rounded-xl bg-[#14532D]/10 p-2.5 text-xs">
-                <span className="font-semibold text-[#14532D]">🎟️ Orders Made:</span>
-                <span className="rounded-full bg-[#14532D] px-2.5 py-0.5 font-mono text-[11px] font-bold text-[#FCECC5]">
-                  {totalOrdersCount} {totalOrdersCount === 1 ? "order" : "orders"}
-                </span>
+              {/* Quick stats row */}
+              <div className="mt-3.5 grid grid-cols-2 gap-2 border-t border-white/15 pt-3 text-center">
+                <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Total Orders</div>
+                  <div className="font-mono text-base font-extrabold text-[#FCECC5]">{totalOrdersCount}</div>
+                </div>
+                <div className="rounded-xl bg-white/10 p-2 backdrop-blur">
+                  <div className="text-[9px] font-bold uppercase tracking-wider text-lime-200/80">Campus Wallet</div>
+                  <div className="font-mono text-base font-extrabold text-white">₹{walletBalance}</div>
+                </div>
               </div>
 
               {scopedCanteen && (
-                <div className="mt-2 flex items-center gap-2 rounded-xl border border-[#14532D]/20 bg-white p-2">
-                  <div className="h-8 w-8 shrink-0 overflow-hidden rounded-lg bg-stone-100">
+                <div className="mt-3 flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 p-2 backdrop-blur">
+                  <div className="h-7 w-7 shrink-0 overflow-hidden rounded-lg bg-stone-100">
                     <img src={scopedCanteen.logo} alt="" className="h-full w-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-[#14532D]">Assigned canteen</div>
-                    <div className="truncate text-[12px] font-bold">{scopedCanteen.name}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-[0.15em] text-lime-300">Managed Canteen</div>
+                    <div className="truncate text-[11px] font-bold text-white">{scopedCanteen.name}</div>
                   </div>
-                  <span className="rounded-full bg-[#FCECC5] px-1.5 py-0.5 text-[9px] font-bold text-amber-900">🔒 Private</span>
                 </div>
               )}
             </div>
 
-            <div className="p-2 text-sm space-y-0.5">
+            <div className="p-2 text-sm space-y-1">
               <button
                 onClick={() => { setOpen(false); setShowProfileModal(true); }}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50 font-medium cursor-pointer"
+                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
               >
-                <span className="flex items-center gap-2">👤 <span>My profile</span></span>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">View</span>
+                <span className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-emerald-800 text-xs">👤</span>
+                  <span>My Student Profile &amp; Pass</span>
+                </span>
+                <span className="rounded-full bg-[#14532D] px-2 py-0.5 text-[9px] font-bold text-[#FCECC5]">PASS</span>
               </button>
+
               <button
                 onClick={() => { setOpen(false); if (onViewOrders) onViewOrders(); }}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50 font-medium cursor-pointer"
+                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
               >
-                <span className="flex items-center gap-2">🎟️ <span>Tokens / Orders</span></span>
-                <span className="rounded-full bg-stone-100 px-2 py-0.5 font-mono text-[10px] font-bold text-stone-700">
+                <span className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 text-amber-800 text-xs">🎟️</span>
+                  <span>My Tokens &amp; History</span>
+                </span>
+                <span className="rounded-full bg-stone-100 px-2 py-0.5 font-mono text-[11px] font-bold text-stone-800">
                   {totalOrdersCount}
                 </span>
               </button>
+
               <button
                 onClick={() => { setOpen(false); if (onOpenWallet) onOpenWallet(); }}
-                className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-50 font-medium cursor-pointer"
+                className="flex w-full items-center justify-between rounded-xl px-3.5 py-2.5 text-left font-bold text-stone-800 hover:bg-[#F6F2EA] transition cursor-pointer"
               >
-                <span className="flex items-center gap-2">🎓 <span>Campus wallet</span></span>
-                <span className="font-mono text-xs font-bold text-[#14532D]">₹{walletBalance}</span>
+                <span className="flex items-center gap-2.5">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 text-cyan-800 text-xs">💳</span>
+                  <span>Top Up Wallet (UPI)</span>
+                </span>
+                <span className="font-mono text-xs font-extrabold text-[#14532D]">₹{walletBalance}</span>
               </button>
+
               <div className="my-1 h-px bg-stone-100" />
+
               <button
                 onClick={() => { setOpen(false); onLogout(); }}
-                className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[#D64545] hover:bg-rose-50 font-medium cursor-pointer"
+                className="flex w-full items-center gap-2.5 rounded-xl px-3.5 py-2.5 text-left font-bold text-[#D64545] hover:bg-rose-50 transition cursor-pointer"
               >
-                ↪ <span>Sign out</span>
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-rose-50 text-rose-700 text-xs">↪</span>
+                <span>Sign Out</span>
               </button>
             </div>
           </div>
         </>
       )}
 
-      {/* My Profile Modal */}
+      {/* Upgraded Digital Campus Pass & Profile Modal */}
       {showProfileModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-md overflow-hidden rounded-[28px] bg-white p-6 shadow-2xl border border-stone-100 text-stone-800">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#14532D]">Student Account</div>
-                <h3 className="text-xl font-bold text-stone-900">My Profile & Stats</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#0B1F16]/75 backdrop-blur-md animate-fade-in">
+          <div className="w-full max-w-lg overflow-hidden rounded-[32px] bg-[#F6F2EA] shadow-2xl border border-stone-200 text-stone-800">
+            
+            {/* Top digital pass header */}
+            <div className="relative overflow-hidden bg-gradient-to-br from-[#0B1F16] via-[#14532D] to-[#0B1F16] p-6 text-white">
+              <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-lime-400/20 blur-2xl" />
+              
+              <div className="flex items-center justify-between border-b border-white/15 pb-4">
+                <div className="flex items-center gap-2">
+                  <img src="/logos/college.png" alt="NIET" className="h-8 w-8 object-contain" />
+                  <div>
+                    <div className="text-[9px] font-extrabold uppercase tracking-[0.2em] text-lime-200">Nehru Institute of Engg. &amp; Tech.</div>
+                    <div className="text-[10px] text-white/70">CampusBite Digital Pass</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowProfileModal(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-full bg-white/15 text-white hover:bg-white/25 cursor-pointer"
+                >
+                  ✕
+                </button>
               </div>
-              <button
-                onClick={() => setShowProfileModal(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-stone-100 text-stone-500 hover:bg-stone-200 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
 
-            <div className="mt-5 flex items-center gap-4 rounded-2xl bg-gradient-to-r from-[#0B1F16] to-[#14532D] p-5 text-white shadow-lg">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#FCECC5] text-xl font-extrabold text-[#0B1F16] shadow-sm">
-                {initials}
-              </div>
-              <div className="min-w-0 flex-1">
-                <h4 className="text-lg font-bold truncate">{user.name}</h4>
-                <p className="text-xs text-lime-200 truncate">{user.email}</p>
-                <div className="mt-1 flex items-center gap-2 text-[11px] text-white/90">
-                  <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{user.dept || "Student"}</span>
-                  <span className="rounded-full bg-white/15 px-2 py-0.5 font-semibold">{user.year || "NIET"}</span>
+              {/* Student identity card */}
+              <div className="mt-5 flex items-center gap-5">
+                <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-3xl bg-[#FCECC5] text-3xl font-black text-[#0B1F16] shadow-xl ring-4 ring-white/20">
+                  {initials}
+                  <span className="absolute -bottom-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-[#14532D] text-xs text-[#FCECC5] ring-2 ring-white">
+                    ✓
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="inline-flex items-center gap-1.5 rounded-full bg-lime-400/20 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-lime-200 border border-lime-400/30">
+                    <span className="h-1.5 w-1.5 rounded-full bg-lime-300 animate-pulse" /> Verified Student
+                  </div>
+                  <h3 className="mt-1 text-2xl font-extrabold truncate text-white">{user.name}</h3>
+                  <p className="text-xs text-lime-200/90 truncate">{user.email}</p>
+                  
+                  <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                    <span className="rounded-md bg-white/15 px-2 py-0.5 text-white">{user.dept || "CSE"}</span>
+                    <span className="rounded-md bg-white/15 px-2 py-0.5 text-white">{user.year || "3rd Year"}</span>
+                    <span className="rounded-md bg-[#FCECC5] px-2 py-0.5 text-[#0B1F16]">{dinerTier}</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Stats Grid */}
-            <div className="mt-5 grid grid-cols-2 gap-3">
-              <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 text-center">
-                <div className="text-2xl mb-1">🎟️</div>
-                <div className="font-mono text-2xl font-extrabold text-[#0B1F16]">{totalOrdersCount}</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mt-1">Orders Made</div>
-              </div>
-              <div className="rounded-2xl border border-stone-200 bg-stone-50/80 p-4 text-center">
-                <div className="text-2xl mb-1">⚡</div>
-                <div className="font-mono text-2xl font-extrabold text-lime-700">{activeOrdersCount}</div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500 mt-1">Active Tokens</div>
-              </div>
-            </div>
-
-            <div className="mt-3 rounded-2xl border border-stone-200 bg-stone-50/80 p-4 flex items-center justify-between">
+            {/* Dashboard Content */}
+            <div className="p-6 space-y-4 max-h-[65vh] overflow-y-auto">
+              {/* Analytics metrics grid */}
               <div>
-                <div className="text-[10px] font-bold uppercase tracking-wider text-stone-500">Campus Wallet</div>
-                <div className="font-mono text-xl font-bold text-[#14532D]">₹{walletBalance}</div>
-              </div>
-              <button
-                onClick={() => {
-                  setShowProfileModal(false);
-                  if (onOpenWallet) onOpenWallet();
-                }}
-                className="rounded-full bg-[#14532D] px-4 py-2 text-xs font-bold text-white hover:bg-[#0F3E22] cursor-pointer"
-              >
-                + Top Up Wallet
-              </button>
-            </div>
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D] mb-2">Campus Food Analytics</div>
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-center shadow-sm">
+                    <div className="text-xl mb-0.5">🎟️</div>
+                    <div className="font-mono text-2xl font-black text-[#0B1F16]">{totalOrdersCount}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500">Orders Made</div>
+                  </div>
 
-            <div className="mt-5 flex gap-2">
-              <button
-                onClick={() => {
-                  setShowProfileModal(false);
-                  if (onViewOrders) onViewOrders();
-                }}
-                className="flex-1 rounded-full bg-[#0B1F16] py-3 text-xs font-bold text-white hover:bg-[#14532D] cursor-pointer"
-              >
-                View Order Tokens →
-              </button>
+                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-center shadow-sm">
+                    <div className="text-xl mb-0.5">⚡</div>
+                    <div className="font-mono text-2xl font-black text-emerald-800">{activeOrdersCount}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500">Active Queue</div>
+                  </div>
+
+                  <div className="rounded-2xl border border-stone-200 bg-white p-3.5 text-center shadow-sm">
+                    <div className="text-xl mb-0.5">💳</div>
+                    <div className="font-mono text-2xl font-black text-[#14532D]">₹{walletBalance}</div>
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-stone-500">Wallet</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Instant Wallet Card */}
+              <div className="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-extrabold uppercase tracking-wider text-[#14532D]">Campus Wallet Balance</div>
+                    <div className="font-mono text-3xl font-black text-[#0B1F16] mt-0.5">₹{walletBalance}</div>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(false);
+                      if (onOpenWallet) onOpenWallet();
+                    }}
+                    className="rounded-full bg-[#14532D] px-4 py-2.5 text-xs font-extrabold text-[#FCECC5] shadow-md hover:bg-[#0F3E22] transition cursor-pointer"
+                  >
+                    + Top Up via UPI 📱
+                  </button>
+                </div>
+                <div className="mt-3 flex items-center justify-between text-[11px] text-stone-600 border-t border-emerald-100 pt-2.5">
+                  <span>Official UPI Pay Number: <span className="font-mono font-bold text-stone-900">9360571671</span></span>
+                  <span className="font-bold text-emerald-800">Instant Credit ✓</span>
+                </div>
+              </div>
+
+              {/* Student Preferences & Settings */}
+              <div className="rounded-2xl border border-stone-200 bg-white p-4 space-y-3 shadow-sm">
+                <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">Pass Preferences</div>
+                
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-800 border-b border-stone-100 pb-2">
+                  <span className="flex items-center gap-2">🔔 <span>Kitchen Order Notifications</span></span>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Active</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-800 border-b border-stone-100 pb-2">
+                  <span className="flex items-center gap-2">📍 <span>Preferred Delivery Spot</span></span>
+                  <span className="font-bold text-stone-600">Block A · Room A-304</span>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-800">
+                  <span className="flex items-center gap-2">🔒 <span>Account Security</span></span>
+                  <span className="font-bold text-stone-600">Verified Email</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={() => {
+                    setShowProfileModal(false);
+                    if (onViewOrders) onViewOrders();
+                  }}
+                  className="flex-1 rounded-full bg-[#0B1F16] py-3.5 text-xs font-extrabold text-white shadow-lg hover:bg-[#14532D] transition cursor-pointer"
+                >
+                  View Order Tokens &amp; History →
+                </button>
+              </div>
             </div>
           </div>
         </div>
