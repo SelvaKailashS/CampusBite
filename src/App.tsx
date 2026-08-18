@@ -630,7 +630,7 @@ export default function App() {
     pushToast(`Token ${order.token} generated · ETA ${order.etaMin} min 🔔`);
   };
 
-  const cancelStudentOrder = (orderId: string) => {
+  const cancelStudentOrder = async (orderId: string) => {
     const target = orders.find((o) => o.id === orderId);
     if (!target) return;
     if (target.stage >= 2) {
@@ -646,6 +646,22 @@ export default function App() {
         setTrackingOrderId(null);
       }
       pushToast(`Order ${target.token} cancelled. ${target.payment === "wallet" ? `₹${target.total} refunded to wallet!` : "Refund processed."}`, "info");
+
+      // Permanently delete from backend database so it doesn't re-appear on polling
+      const token = localStorage.getItem("campusbite_token");
+      if (token) {
+        try {
+          const numId = Number(orderId.replace(/\D/g, ""));
+          if (!isNaN(numId)) {
+            await fetch(`/api/orders/${numId}`, {
+              method: "DELETE",
+              headers: { Authorization: `Bearer ${token}` },
+            });
+          }
+        } catch (e) {
+          console.error("Failed to delete order from server", e);
+        }
+      }
     }
   };
 
@@ -4649,11 +4665,23 @@ function AdminDashboard({
     }
   };
 
-  const clearAllOrders = () => {
-    if (confirm("Are you sure you want to clear all active and past orders from view?")) {
+  const clearAllOrders = async () => {
+    if (confirm("Are you sure you want to permanently clear all test orders from the database?")) {
       setOrders([]);
       localStorage.removeItem("campusbite_orders");
       pushToast("All test orders cleared from system", "info");
+
+      const token = localStorage.getItem("campusbite_token");
+      if (token) {
+        try {
+          await fetch("/api/orders", {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+        } catch (e) {
+          console.error("Failed to clear orders on server", e);
+        }
+      }
     }
   };
 

@@ -35,6 +35,25 @@ export default async function handler(req, res) {
     }
   }
 
+  if (req.method === "DELETE") {
+    try {
+      const where = auth.role === "admin" || auth.role === "super_admin"
+        ? (auth.canteenId ? { canteenId: auth.canteenId } : {})
+        : { userId: auth.id };
+
+      const userOrders = await prisma.order.findMany({ where, select: { id: true } });
+      const orderIds = userOrders.map((o) => o.id);
+
+      if (orderIds.length > 0) {
+        await prisma.orderItem.deleteMany({ where: { orderId: { in: orderIds } } });
+        await prisma.order.deleteMany({ where: { id: { in: orderIds } } });
+      }
+      return res.json({ ok: true, deletedCount: orderIds.length });
+    } catch (e) {
+      return res.status(500).json({ error: "Failed to delete orders" });
+    }
+  }
+
   if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
