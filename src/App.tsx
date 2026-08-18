@@ -570,6 +570,7 @@ export default function App() {
           scheduledTime,
           isGroupOrder: !!groupMembers?.length,
           groupMembers: groupMembers || undefined,
+          isFacultyOrder: user?.role === "staff",
         };
         if (payment === "wallet") setWalletBalance((b) => b - total);
         setOrders((o) => [order, ...o]);
@@ -597,7 +598,7 @@ export default function App() {
       mode: orderMode,
       location: orderMode === "delivery" ? location : undefined,
       placedAt: Date.now(),
-      etaMin: canteen.waitMax + (orderMode === "delivery" ? 3 : 0),
+      etaMin: Math.max(3, canteen.waitMin - (user?.role === "staff" ? 3 : 0)),
       stage: 1,
       student: user?.name ?? "Guest",
       payment,
@@ -605,6 +606,7 @@ export default function App() {
       scheduledTime,
       isGroupOrder: !!groupMembers?.length,
       groupMembers: groupMembers || undefined,
+      isFacultyOrder: user?.role === "staff",
     };
     setOrders((o) => [order, ...o]);
     setCart([]);
@@ -3433,9 +3435,10 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
     if (mode === "register") {
       if (role === "admin") { setError("Admin accounts are pre-provisioned. Use Sign in instead."); return; }
       if (role === "staff") {
+        const activeFacultyCode = (localStorage.getItem("campusbite_faculty_code") || "FACULTY2026").trim().toUpperCase();
         const isFacultyEmail = email.trim().toLowerCase().endsWith("@niet.ac.in") || email.trim().toLowerCase().endsWith("@niet.edu.in");
-        if (!isFacultyEmail && staffCode.trim().toUpperCase() !== "FACULTY2026") {
-          setError("Faculty registration requires a valid Faculty Verification Code (FACULTY2026) or college email (@niet.ac.in). Students must use the Student tab.");
+        if (!isFacultyEmail && staffCode.trim().toUpperCase() !== activeFacultyCode && staffCode.trim().toUpperCase() !== "FACULTY2026") {
+          setError(`Faculty registration requires a valid Faculty Verification Code (${activeFacultyCode}) or college email (@niet.ac.in).`);
           return;
         }
       }
@@ -5197,8 +5200,14 @@ function AdminDashboard({
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="font-mono text-3xl font-black tracking-[0.15em] text-[#14532D]">{o.token}</div>
-                        <div className="mt-0.5 text-xs font-bold text-stone-600">{c.name} · #{o.id}</div>
-                        <div className="mt-1 text-xs font-bold text-stone-800">👤 {o.student}</div>
+                        <div className="mt-1 flex items-center gap-1.5 text-xs font-bold text-stone-800">
+                          <span>👤 {o.student}</span>
+                          {o.isFacultyOrder && (
+                            <span className="rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[9px] font-black uppercase text-amber-900 shadow-xs">
+                              ⭐ Faculty VIP Priority
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className="font-display text-2xl font-black text-[#0B1F16]">₹{o.total}</div>

@@ -87,4 +87,5 @@ export interface Order {
   scheduledTime?: string;
   isGroupOrder?: boolean;
   groupMembers?: GroupSplitMember[];
+  isFacultyOrder?: boolean;
 }
