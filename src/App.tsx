@@ -343,7 +343,7 @@ export default function App() {
                 : undefined,
               placedAt: new Date(o.placedAt).getTime(),
               etaMin: o.etaMin || 15,
-              stage: o.stage || 0,
+              stage: typeof o.stage === "number" ? o.stage : 1,
               student: o.studentName || "Student",
               payment: o.payment || "online-upi",
               paymentStatus: o.paymentStatus || "paid",
@@ -351,6 +351,7 @@ export default function App() {
             }));
 
             setOrders((prev) => {
+              const prevMap = new Map(prev.map((o) => [o.id, o]));
               const map = new Map<string, Order>();
               const isAdmin = user?.role === "admin";
 
@@ -360,7 +361,15 @@ export default function App() {
                 ? fetchedOrders
                 : fetchedOrders.filter((o) => !user?.name || o.student.toLowerCase() === user.name.toLowerCase());
 
-              relevantFetched.forEach((o) => map.set(o.id, o));
+              relevantFetched.forEach((o) => {
+                const local = prevMap.get(o.id);
+                if (local) {
+                  // Prevent polling rollbacks / button flickering: keep max stage reached
+                  map.set(o.id, { ...o, stage: Math.max(o.stage, local.stage) });
+                } else {
+                  map.set(o.id, o);
+                }
+              });
 
               // Keep local orders placed in this browser session for this user
               prev.forEach((o) => {
@@ -589,7 +598,7 @@ export default function App() {
       location: orderMode === "delivery" ? location : undefined,
       placedAt: Date.now(),
       etaMin: canteen.waitMax + (orderMode === "delivery" ? 3 : 0),
-      stage: 0,
+      stage: 1,
       student: user?.name ?? "Guest",
       payment,
       paymentStatus: payment === "counter-cash" ? "pending" : "paid",

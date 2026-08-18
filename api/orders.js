@@ -101,7 +101,7 @@ export default async function handler(req, res) {
         desk: location?.desk ?? null,
         payment,
         paymentStatus: payment === "counter-cash" ? "pending" : "paid",
-        stage: 0,
+        stage: 1,
         etaMin: canteen.waitMax + (mode === "delivery" ? 3 : 0),
         studentName: auth.name || "Guest",
         items: { create: orderItems },
