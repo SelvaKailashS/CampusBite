@@ -7,8 +7,8 @@ import type {
 
 type Toast = { id: number; msg: string; kind: "success" | "info" | "warn" };
 type ActiveView = "home" | "kitchen" | "orders" | "admin";
-type Role = "student" | "admin";
-type User = { name: string; roll?: string; email: string; dept: string; year: string; role: Role; canteenId?: string };
+type Role = "student" | "staff" | "admin";
+type User = { name: string; roll?: string; email: string; dept: string; year: string; role: Role; canteenId?: string; cabin?: string };
 
 const filters = ["All", "Veg", "Non-Veg", "Snacks", "Meals", "Drinks", "Popular", "Under ₹50"] as const;
 type FilterKey = (typeof filters)[number];
@@ -2610,14 +2610,15 @@ function ProfileMenu({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="inline-flex items-center gap-1.5 rounded-full bg-lime-400/20 px-2.5 py-0.5 text-[9px] font-extrabold uppercase tracking-widest text-lime-200 border border-lime-400/30">
-                    <span className="h-1.5 w-1.5 rounded-full bg-lime-300 animate-pulse" /> Verified Student
+                    <span className="h-1.5 w-1.5 rounded-full bg-lime-300 animate-pulse" />
+                    {user.role === "staff" ? "Faculty / Staff Member 👨‍🏫" : user.role === "admin" ? "Canteen Admin 🛡️" : "Verified Student"}
                   </div>
                   <h3 className="mt-1 text-xl sm:text-2xl font-extrabold truncate text-white">{user.name}</h3>
                   <p className="text-xs text-lime-200/90 truncate">{user.email}</p>
                   
                   <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] font-bold">
                     <span className="rounded-md bg-white/15 px-2 py-0.5 text-white">{user.dept || "CSE"}</span>
-                    <span className="rounded-md bg-white/15 px-2 py-0.5 text-white">{user.year || "3rd Year"}</span>
+                    <span className="rounded-md bg-white/15 px-2 py-0.5 text-white">{user.cabin || user.year || "NIET"}</span>
                     <span className="rounded-md bg-[#FCECC5] px-2 py-0.5 text-[#0B1F16]">{dinerTier}</span>
                   </div>
                 </div>
@@ -2843,26 +2844,25 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
         <div className="flex items-center justify-center p-6 sm:p-10">
           <div className="w-full max-w-md">
             {/* Role selector */}
-            <div className="mb-6 grid grid-cols-2 gap-2 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-stone-900/5">
-              {([
-                { key: "student" as Role, label: "Student", icon: "🎓", sub: "Order & track food" },
-                { key: "admin" as Role, label: "Admin / Staff", icon: "🛡", sub: "Manage canteens" },
-              ]).map((r) => (
+            <div className="mb-6 grid grid-cols-3 gap-1.5 rounded-2xl bg-white p-1.5 shadow-sm ring-1 ring-stone-900/5">
+              {[
+                { key: "student" as Role, label: "Student", icon: "🎓" },
+                { key: "staff" as Role, label: "Faculty / Staff", icon: "👨‍🏫" },
+                { key: "admin" as Role, label: "Canteen Admin", icon: "🛡" },
+              ].map((r) => (
                 <button
                   key={r.key}
+                  type="button"
                   onClick={() => { setRole(r.key); setError(""); if (r.key === "admin") setMode("login"); }}
                   className={
-                    "flex flex-col items-start gap-0.5 rounded-xl px-4 py-3 text-left transition " +
+                    "flex flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-2.5 text-center transition cursor-pointer " +
                     (role === r.key
-                      ? "bg-[#0B1F16] text-white shadow-md"
+                      ? "bg-[#0B1F16] text-white shadow-md font-bold"
                       : "bg-transparent text-stone-600 hover:bg-stone-50")
                   }
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{r.icon}</span>
-                    <span className="text-[13px] font-bold">{r.label}</span>
-                  </div>
-                  <span className={"text-[10px] " + (role === r.key ? "text-white/60" : "text-stone-500")}>{r.sub}</span>
+                  <span className="text-base">{r.icon}</span>
+                  <span className="text-[11px] font-bold leading-tight">{r.label}</span>
                 </button>
               ))}
             </div>
