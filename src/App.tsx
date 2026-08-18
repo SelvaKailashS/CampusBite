@@ -3588,6 +3588,7 @@ function AdminDashboard({
   const [tab, setTab] = useState<AdminTab>("overview");
   const [orderFilter, setOrderFilter] = useState<string>("all");
   const [menuFilter, setMenuFilter] = useState<string>(scopedCanteenId ?? "all");
+  const [menuSort, setMenuSort] = useState<"default" | "orders" | "revenue">("orders");
   const [editingFood, setEditingFood] = useState<FoodItem | null>(null);
   const [addFoodOpen, setAddFoodOpen] = useState(false);
 
@@ -3618,6 +3619,7 @@ function AdminDashboard({
     dishTally[i.foodId].revenue += i.price * i.qty;
   }));
   const topDishes = Object.values(dishTally).sort((a, b) => b.qty - a.qty).slice(0, 5);
+  const maxDishOrders = Math.max(0, ...Object.values(dishTally).map((d) => d.qty));
 
   const setCanteenStatus = async (id: string, status: Canteen["status"]) => {
     const c = canteens.find((x) => x.id === id);
@@ -4057,11 +4059,11 @@ function AdminDashboard({
       {tab === "menu" && (
         <div className="mt-6">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {isSuperAdmin && (
                 <button
                   onClick={() => setMenuFilter("all")}
-                  className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition " +
+                  className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition cursor-pointer " +
                     (menuFilter === "all" ? "border-[#0B1F16] bg-[#0B1F16] text-white" : "border-stone-200 bg-white text-stone-700")}
                 >
                   All canteens
@@ -4071,16 +4073,37 @@ function AdminDashboard({
                 <button
                   key={c.id}
                   onClick={() => setMenuFilter(c.id)}
-                  className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition " +
+                  className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition cursor-pointer " +
                     (menuFilter === c.id ? "border-[#0B1F16] bg-[#0B1F16] text-white" : "border-stone-200 bg-white text-stone-700")}
                 >
                   {c.name}
                 </button>
               ))}
+
+              <div className="mx-2 h-4 w-px bg-stone-300 hidden sm:block" />
+
+              {/* Sort pills */}
+              <div className="flex items-center gap-1 rounded-full bg-stone-100 p-1 text-[11px] font-bold">
+                {[
+                  { k: "orders" as const, label: "🔥 Most Ordered" },
+                  { k: "revenue" as const, label: "💰 Highest Revenue" },
+                  { k: "default" as const, label: "Default" },
+                ].map((s) => (
+                  <button
+                    key={s.k}
+                    onClick={() => setMenuSort(s.k)}
+                    className={"rounded-full px-3 py-1 transition cursor-pointer " +
+                      (menuSort === s.k ? "bg-[#14532D] text-white shadow-sm" : "text-stone-600 hover:text-stone-900")}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             </div>
+
             <button
               onClick={() => setAddFoodOpen(true)}
-              className="inline-flex items-center gap-2 rounded-full bg-[#D64545] px-4 py-2 text-[12px] font-bold text-white shadow-md hover:bg-[#B93636]"
+              className="inline-flex items-center gap-2 rounded-full bg-[#D64545] px-4 py-2 text-[12px] font-bold text-white shadow-md hover:bg-[#B93636] cursor-pointer"
             >
               + Add new item
             </button>
@@ -4088,30 +4111,52 @@ function AdminDashboard({
 
           <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-900/5">
             <div className="hidden grid-cols-12 gap-3 border-b border-stone-100 bg-[#E7EEE7] px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D] md:grid">
-              <div className="col-span-4">Item</div>
+              <div className="col-span-4">Item &amp; Sales Tally</div>
               <div className="col-span-2">Canteen</div>
               <div className="col-span-1">Diet</div>
               <div className="col-span-2">Price (₹)</div>
               <div className="col-span-1">Sig.</div>
               <div className="col-span-2 text-right">Actions</div>
             </div>
-            {menuFoods.filter((f) => isSuperAdmin || f.canteenId === scopedCanteenId).map((f) => {
-              const c = canteens.find((x) => x.id === f.canteenId)!;
-              return (
-                <div key={f.id} className="grid grid-cols-12 items-center gap-3 border-t border-stone-100 px-6 py-3 transition hover:bg-stone-50">
-                  <div className="col-span-12 flex items-center gap-3 md:col-span-4">
-                    <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-stone-100">
-                      {f.image ? (
-                        <img src={f.image} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className={"flex h-full w-full items-center justify-center text-lg " + f.bg}>{f.emoji}</div>
-                      )}
+            {menuFoods
+              .filter((f) => (isSuperAdmin || f.canteenId === scopedCanteenId) && (menuFilter === "all" || f.canteenId === menuFilter))
+              .sort((a, b) => {
+                if (menuSort === "orders") return (dishTally[b.id]?.qty || 0) - (dishTally[a.id]?.qty || 0);
+                if (menuSort === "revenue") return (dishTally[b.id]?.revenue || 0) - (dishTally[a.id]?.revenue || 0);
+                return 0;
+              })
+              .map((f) => {
+                const c = canteens.find((x) => x.id === f.canteenId)!;
+                const tally = dishTally[f.id] || { qty: 0, revenue: 0 };
+                const isTopOrdered = tally.qty > 0 && tally.qty === maxDishOrders;
+
+                return (
+                  <div key={f.id} className="grid grid-cols-12 items-center gap-3 border-t border-stone-100 px-6 py-3.5 transition hover:bg-stone-50">
+                    <div className="col-span-12 flex items-center gap-3 md:col-span-4">
+                      <div className="h-11 w-11 shrink-0 overflow-hidden rounded-xl bg-stone-100 shadow-sm border border-stone-200">
+                        {f.image ? (
+                          <img src={f.image} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <div className={"flex h-full w-full items-center justify-center text-xl " + f.bg}>{f.emoji}</div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="truncate text-sm font-bold text-stone-900">{f.name}</span>
+                          {isTopOrdered && (
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/20 px-2 py-0.5 text-[9px] font-black uppercase text-amber-900 border border-amber-500/40 animate-pulse">
+                              🔥 #1 Most Ordered
+                            </span>
+                          )}
+                          {tally.qty > 0 && (
+                            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[9px] font-mono font-extrabold text-emerald-900 border border-emerald-300">
+                              🛒 {tally.qty} sold (₹{tally.revenue})
+                            </span>
+                          )}
+                        </div>
+                        <div className="truncate text-[10px] text-stone-500">{f.description}</div>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-bold">{f.name}</div>
-                      <div className="truncate text-[10px] text-stone-500">{f.description}</div>
-                    </div>
-                  </div>
                   <div className="col-span-6 md:col-span-2 text-xs font-semibold text-stone-700">{c.name}</div>
                   <div className="col-span-2 md:col-span-1">
                     <span className={"inline-flex h-4 w-4 items-center justify-center rounded-sm border-2 bg-white " +
