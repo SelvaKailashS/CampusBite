@@ -361,12 +361,25 @@ export default function App() {
 
             setOrders((prev) => {
               const map = new Map<string, Order>();
-              // Put fetched orders first
-              fetchedOrders.forEach((o) => map.set(o.id, o));
-              // Merge local unsaved orders
+              const isAdmin = user?.role === "admin";
+
+              // If admin, show all fetched DB orders
+              // If student, filter fetched DB orders to only show those belonging to this student
+              const relevantFetched = isAdmin
+                ? fetchedOrders
+                : fetchedOrders.filter((o) => !user?.name || o.student.toLowerCase() === user.name.toLowerCase());
+
+              relevantFetched.forEach((o) => map.set(o.id, o));
+
+              // Keep local orders placed in this browser session for this user
               prev.forEach((o) => {
-                if (!map.has(o.id)) map.set(o.id, o);
+                if (!map.has(o.id)) {
+                  if (isAdmin || !user?.name || o.student.toLowerCase() === user.name.toLowerCase()) {
+                    map.set(o.id, o);
+                  }
+                }
               });
+
               return Array.from(map.values()).sort((a, b) => b.placedAt - a.placedAt);
             });
           }
