@@ -4616,6 +4616,47 @@ function AdminDashboard({
     pushToast(`Order ${id} cancelled & refunded`, "warn");
   };
 
+  const advanceOrderStage = async (orderId: string) => {
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === orderId) {
+          const stages = o.mode === "pickup" ? pickupStages : orderStages;
+          const next = Math.min(stages.length - 1, o.stage + 1);
+          if (next === 2) {
+            const canteenObj = canteens.find((c) => c.id === o.canteenId);
+            announceTokenReady(o.token, canteenObj?.name);
+          }
+          return { ...o, stage: next };
+        }
+        return o;
+      })
+    );
+
+    pushToast(`Order status updated!`, "success");
+
+    const token = localStorage.getItem("campusbite_token");
+    if (token) {
+      try {
+        const numId = Number(orderId.replace(/\D/g, ""));
+        if (!isNaN(numId)) {
+          await fetch("/api/admin/orders", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ id: numId, action: "advance" }),
+          });
+        }
+      } catch {}
+    }
+  };
+
+  const clearAllOrders = () => {
+    if (confirm("Are you sure you want to clear all active and past orders from view?")) {
+      setOrders([]);
+      localStorage.removeItem("campusbite_orders");
+      pushToast("All test orders cleared from system", "info");
+    }
+  };
+
   return (
     <main className="mx-auto max-w-[1400px] px-6 py-8">
       {/* Admin hero */}
@@ -5133,77 +5174,131 @@ function AdminDashboard({
       {/* ========= ORDERS ========= */}
       {tab === "orders" && (
         <div className="mt-6">
-          {isSuperAdmin && (
-            <div className="mb-4 flex flex-wrap gap-2">
-              <button
-                onClick={() => setOrderFilter("all")}
-                className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition " +
-                  (orderFilter === "all" ? "border-[#0B1F16] bg-[#0B1F16] text-white" : "border-stone-200 bg-white text-stone-700")}
-              >
-                All ({visibleOrders.length})
-              </button>
-              {visibleCanteens.map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => setOrderFilter(c.id)}
-                  className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition " +
-                    (orderFilter === c.id ? "border-[#0B1F16] bg-[#0B1F16] text-white" : "border-stone-200 bg-white text-stone-700")}
-                >
-                  {c.name} ({visibleOrders.filter((o) => o.canteenId === c.id).length})
-                </button>
-              ))}
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {isSuperAdmin && (
+                <>
+                  <button
+                    onClick={() => setOrderFilter("all")}
+                    className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition cursor-pointer " +
+                      (orderFilter === "all" ? "border-[#0B1F16] bg-[#0B1F16] text-white" : "border-stone-200 bg-white text-stone-700")}
+                  >
+                    All ({visibleOrders.length})
+                  </button>
+                  {visibleCanteens.map((c) => (
+                    <button
+                      key={c.id}
+                      onClick={() => setOrderFilter(c.id)}
+                      className={"rounded-full border px-4 py-1.5 text-[12px] font-bold transition cursor-pointer " +
+                        (orderFilter === c.id ? "border-[#0B1F16] bg-[#0B1F16] text-white" : "border-stone-200 bg-white text-stone-700")}
+                    >
+                      {c.name} ({visibleOrders.filter((o) => o.canteenId === c.id).length})
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
-          )}
+
+            {filteredOrders.length > 0 && (
+              <button
+                onClick={clearAllOrders}
+                className="rounded-full border border-stone-300 bg-stone-100 px-4 py-1.5 text-xs font-bold text-stone-700 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-300 transition cursor-pointer"
+              >
+                🧹 Clear Test Orders
+              </button>
+            )}
+          </div>
 
           {filteredOrders.length === 0 ? (
             <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-16 text-center">
               <div className="text-6xl">📦</div>
-              <div className="mt-3 font-display text-2xl italic text-stone-500">No orders yet.</div>
+              <div className="mt-3 font-display text-2xl italic text-stone-500">No active orders yet.</div>
             </div>
           ) : (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-4 md:grid-cols-2">
               {filteredOrders.map((o) => {
-                const c = canteens.find((x) => x.id === o.canteenId)!;
+                const c = canteens.find((x) => x.id === o.canteenId) || canteens[0];
                 const stages = o.mode === "pickup" ? pickupStages : orderStages;
                 const done = o.stage >= stages.length - 1;
                 return (
-                  <div key={o.id} className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-stone-900/5">
+                  <div key={o.id} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-900/5">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="font-mono text-2xl font-bold tracking-[0.15em] text-[#14532D]">{o.token}</div>
-                        <div className="mt-0.5 text-xs font-semibold text-stone-500">{c.name} · #{o.id}</div>
-                        <div className="mt-1 text-xs">👤 {o.student}</div>
+                        <div className="font-mono text-3xl font-black tracking-[0.15em] text-[#14532D]">{o.token}</div>
+                        <div className="mt-0.5 text-xs font-bold text-stone-600">{c.name} · #{o.id}</div>
+                        <div className="mt-1 text-xs font-bold text-stone-800">👤 {o.student}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-display text-2xl text-[#0B1F16]">₹{o.total}</div>
+                        <div className="font-display text-2xl font-black text-[#0B1F16]">₹{o.total}</div>
                         <div className="mt-0.5 text-[10px] font-bold uppercase tracking-widest text-stone-500">
                           {o.mode === "pickup" ? "Pickup" : "Delivery"}
                         </div>
-                        <div className={"mt-0.5 text-[10px] font-bold uppercase tracking-widest " + (o.paymentStatus === "paid" ? "text-emerald-700" : "text-amber-700")}>
-                          {o.paymentStatus === "paid" ? "✓ Paid" : "Cash"}
+                        <div className={"mt-0.5 text-[10px] font-extrabold uppercase tracking-widest " + (o.paymentStatus === "paid" ? "text-emerald-700" : "text-amber-700")}>
+                          {o.paymentStatus === "paid" ? "✓ Paid Online" : "⚠️ Cash on Counter"}
                         </div>
                       </div>
                     </div>
-                    <div className="mt-3 text-xs text-stone-500 line-clamp-1">
-                      {o.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
+
+                    {/* Order items */}
+                    <div className="mt-3 rounded-xl bg-stone-50 p-2.5 text-xs text-stone-700 font-medium">
+                      {o.items.map((i) => `${i.emoji || "🍽"} ${i.name} × ${i.qty}`).join(", ")}
                     </div>
+
+                    {/* Progress bar */}
                     <div className="mt-3 flex items-center gap-1">
                       {stages.map((_, i) => (
-                        <div key={i} className={"h-1 flex-1 rounded-full " + (i <= o.stage ? "bg-[#14532D]" : "bg-stone-200")} />
+                        <div key={i} className={"h-1.5 flex-1 rounded-full " + (i <= o.stage ? "bg-[#14532D]" : "bg-stone-200")} />
                       ))}
                     </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <span className="text-[11px] font-semibold uppercase tracking-widest text-stone-500">
-                        {stages[o.stage].label}
+
+                    {/* Stage Approval Action Bar */}
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-stone-100 pt-3">
+                      <span className="text-[11px] font-extrabold uppercase tracking-widest text-[#14532D]">
+                        Status: {stages[o.stage].label}
                       </span>
-                      {!done && (
-                        <button
-                          onClick={() => { if (confirm(`Cancel order ${o.id} and refund?`)) cancelOrder(o.id); }}
-                          className="rounded-full border border-rose-200 px-3 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50"
-                        >
-                          Cancel & refund
-                        </button>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {o.stage === 0 && (
+                          <button
+                            onClick={() => advanceOrderStage(o.id)}
+                            className="rounded-full bg-[#14532D] px-3.5 py-1.5 text-[11px] font-extrabold text-white shadow-sm hover:bg-[#0B1F16] transition cursor-pointer"
+                          >
+                            ✅ Approve &amp; Start Cooking
+                          </button>
+                        )}
+                        {o.stage === 1 && (
+                          <>
+                            <button
+                              onClick={() => announceTokenReady(o.token, c.name)}
+                              className="rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[10px] font-extrabold text-amber-900 hover:bg-amber-100 transition cursor-pointer"
+                              title="Voice Callout"
+                            >
+                              🔊 Callout
+                            </button>
+                            <button
+                              onClick={() => advanceOrderStage(o.id)}
+                              className="rounded-full bg-emerald-700 px-3.5 py-1.5 text-[11px] font-extrabold text-white shadow-sm hover:bg-emerald-800 transition cursor-pointer"
+                            >
+                              🔔 Mark Ready for Pickup
+                            </button>
+                          </>
+                        )}
+                        {o.stage === 2 && (
+                          <button
+                            onClick={() => advanceOrderStage(o.id)}
+                            className="rounded-full bg-stone-900 px-3.5 py-1.5 text-[11px] font-extrabold text-white shadow-sm hover:bg-black transition cursor-pointer"
+                          >
+                            ✓ Mark Collected &amp; Done
+                          </button>
+                        )}
+                        {!done && (
+                          <button
+                            onClick={() => { if (confirm(`Cancel order ${o.id} and refund?`)) cancelOrder(o.id); }}
+                            className="rounded-full border border-rose-200 px-2.5 py-1 text-[10px] font-bold text-rose-600 hover:bg-rose-50 cursor-pointer"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 );
