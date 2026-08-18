@@ -1,5 +1,8 @@
 {
-  "buildCommand": "prisma generate && prisma db push --skip-generate --accept-data-loss && vite build",
+  "buildCommand": "prisma generate && vite build",
   "outputDirectory": "dist",
-  "framework": "vite"
+  "framework": "vite",
+  "rewrites": [
+    { "source": "/((?!api/.*).*)", "destination": "/index.html" }
+  ]
 }

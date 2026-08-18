@@ -132,7 +132,7 @@ export default function App() {
     }
   };
 
-  const selectedCanteen = canteens.find((c) => c.id === selectedCanteenId)!;
+  const selectedCanteen = canteens.find((c) => c.id === selectedCanteenId) || canteens[0];
   const cartCanteen = (cartCanteenId ? canteens.find((c) => c.id === cartCanteenId) : null) ?? null;
 
   const canteenSectionRef = useRef<HTMLDivElement>(null);
@@ -176,8 +176,13 @@ export default function App() {
     return list;
   }, [canteenFoods, search, filter, healthFilter]);
 
-  const cartItems = cart.map((ci) => ({ ...ci, food: foods.find((f) => f.id === ci.foodId)! }));
-  const subtotal = cartItems.reduce((s, i) => s + i.food.price * i.qty, 0);
+  const cartItems = cart
+    .map((ci) => {
+      const f = foods.find((food) => food.id === ci.foodId);
+      return f ? { ...ci, food: f } : null;
+    })
+    .filter((x): x is CartItem & { food: FoodItem } => x !== null);
+  const subtotal = cartItems.reduce((s, i) => s + (i.food?.price || 0) * i.qty, 0);
 
   const addToCart = (food: FoodItem) => {
     if (cart.length > 0 && cartCanteenId && cartCanteenId !== food.canteenId) {
