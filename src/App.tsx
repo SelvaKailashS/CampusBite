@@ -324,47 +324,59 @@ export default function App() {
     }
   }, [orders]);
 
-  // Sync orders from DB API when user logs in / restores session
+  // Sync orders from DB API when user logs in & live auto-poll every 4s
   useEffect(() => {
     const token = localStorage.getItem("campusbite_token");
-    if (!token) return;
-    fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data?.orders && Array.isArray(data.orders)) {
-          const fetchedOrders: Order[] = data.orders.map((o: any) => ({
-            id: `CB${o.id}`,
-            token: o.token,
-            canteenId: o.canteenId,
-            items: (o.items || []).map((i: any) => ({
-              foodId: String(i.foodId),
-              qty: i.qty,
-              name: i.name || "Food Item",
-              price: i.price || 0,
-              emoji: i.emoji || "🍽",
-            })),
-            total: o.total,
-            mode: o.mode || "pickup",
-            location: o.block
-              ? { block: o.block, room: o.room, row: o.rowNum, desk: o.desk }
-              : undefined,
-            placedAt: new Date(o.placedAt).getTime(),
-            etaMin: o.etaMin || 15,
-            stage: o.stage || 0,
-            student: o.studentName || "Student",
-            payment: o.payment || "online-upi",
-            paymentStatus: o.paymentStatus || "paid",
-            scheduledTime: o.scheduledTime,
-          }));
 
-          setOrders((prev) => {
-            const existingIds = new Set(prev.map((o) => o.id));
-            const newFetched = fetchedOrders.filter((o) => !existingIds.has(o.id));
-            return [...newFetched, ...prev];
-          });
-        }
-      })
-      .catch(() => {});
+    const syncOrders = () => {
+      if (!token) return;
+      fetch("/api/orders", { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data) => {
+          if (data?.orders && Array.isArray(data.orders)) {
+            const fetchedOrders: Order[] = data.orders.map((o: any) => ({
+              id: `CB${o.id}`,
+              token: o.token,
+              canteenId: o.canteenId,
+              items: (o.items || []).map((i: any) => ({
+                foodId: String(i.foodId),
+                qty: i.qty,
+                name: i.name || "Food Item",
+                price: i.price || 0,
+                emoji: i.emoji || "🍽",
+              })),
+              total: o.total,
+              mode: o.mode || "pickup",
+              location: o.block
+                ? { block: o.block, room: o.room, row: o.rowNum, desk: o.desk }
+                : undefined,
+              placedAt: new Date(o.placedAt).getTime(),
+              etaMin: o.etaMin || 15,
+              stage: o.stage || 0,
+              student: o.studentName || "Student",
+              payment: o.payment || "online-upi",
+              paymentStatus: o.paymentStatus || "paid",
+              scheduledTime: o.scheduledTime,
+            }));
+
+            setOrders((prev) => {
+              const map = new Map<string, Order>();
+              // Put fetched orders first
+              fetchedOrders.forEach((o) => map.set(o.id, o));
+              // Merge local unsaved orders
+              prev.forEach((o) => {
+                if (!map.has(o.id)) map.set(o.id, o);
+              });
+              return Array.from(map.values()).sort((a, b) => b.placedAt - a.placedAt);
+            });
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncOrders();
+    const interval = setInterval(syncOrders, 4000);
+    return () => clearInterval(interval);
   }, [user]);
 
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
@@ -4387,15 +4399,40 @@ function AdminDashboard({
   broadcast?: any;
   setBroadcast?: any;
 }) {
-  // Scope: if user.canteenId is set, this admin is scoped to ONE canteen only
-  const scopedCanteenId = user.canteenId;
-  const scopedCanteen = scopedCanteenId ? canteens.find((c) => c.id === scopedCanteenId) : null;
-  const isSuperAdmin = !scopedCanteenId;
+  const [showAllOutlets, setShowAllOutlets] = useState(false);
 
-  // Visible data — filtered by scope
-  const visibleCanteens = scopedCanteenId ? canteens.filter((c) => c.id === scopedCanteenId) : canteens;
-  const visibleOrders = scopedCanteenId ? orders.filter((o) => o.canteenId === scopedCanteenId) : orders;
-  const visibleFoods = scopedCanteenId ? foods.filter((f) => f.canteenId === scopedCanteenId) : foods;
+  // Effective scope — toggle between single canteen and all canteens
+  const effectiveCanteenId = showAllOutlets ? null : user.canteenId;
+  const scopedCanteen = user.canteenId ? canteens.find((c) => c.id === user.canteenId) : null;
+  const isSuperAdmin = !effectiveCanteenId;
+
+  // Visible data — filtered by effective scope
+  const visibleCanteens = effectiveCanteenId ? canteens.filter((c) => c.id === effectiveCanteenId) : canteens;
+  const visibleOrders = effectiveCanteenId ? orders.filter((o) => o.canteenId === effectiveCanteenId) : orders;
+  const visibleFoods = effectiveCanteenId ? foods.filter((f) => f.canteenId === effectiveCanteenId) : foods;
+
+  // Dynamic student list calculated from live orders + dummy fallback
+  const dynamicStudents = useMemo(() => {
+    const tally: Record<string, { name: string; roll: string; dept: string; year: string; spend: number; orders: number }> = {};
+    orders.forEach((o) => {
+      const name = o.student || "Guest Student";
+      if (!tally[name]) {
+        tally[name] = {
+          name,
+          roll: `22NIET${Math.floor(100 + Math.random() * 900)}`,
+          dept: name.includes("Selva") ? "CSE" : name.includes("Rajesh") ? "Faculty" : "CSE",
+          year: name.includes("Rajesh") ? "Faculty" : "3rd Year",
+          spend: 0,
+          orders: 0,
+        };
+      }
+      tally[name].spend += o.total;
+      tally[name].orders += 1;
+    });
+
+    const liveList = Object.values(tally);
+    return liveList.length > 0 ? liveList : dummyStudents;
+  }, [orders]);
 
   const [localTab, setLocalTab] = useState<AdminTab>("overview");
   const tab = activeTab ?? localTab;
@@ -4575,12 +4612,18 @@ function AdminDashboard({
               🛡 {isSuperAdmin ? "Super Admin" : "Canteen Admin"} · {user.name}
             </div>
             {scopedCanteen && (
-              <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur">
+              <div className="mt-3 inline-flex flex-wrap items-center gap-2 rounded-full bg-white/15 px-3 py-1.5 text-[11px] font-bold text-white backdrop-blur">
                 <div className="h-6 w-6 shrink-0 overflow-hidden rounded-md bg-stone-100">
                   <img src={scopedCanteen.logo} alt="" className="h-full w-full object-cover" />
                 </div>
                 Managing: {scopedCanteen.name}
-                <span className="ml-1 rounded-full bg-lime-400/20 px-1.5 py-0.5 text-[9px] uppercase tracking-widest text-lime-200">Private</span>
+                <button
+                  type="button"
+                  onClick={() => setShowAllOutlets((s) => !s)}
+                  className="ml-1 rounded-full border border-lime-400/50 bg-lime-400/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-lime-200 hover:bg-lime-400/30 transition cursor-pointer"
+                >
+                  {showAllOutlets ? "📍 Only My Canteen" : "🌐 View All Outlets"}
+                </button>
               </div>
             )}
             <h2 className="mt-3 text-4xl font-bold tracking-tight sm:text-5xl">
@@ -5163,25 +5206,25 @@ function AdminDashboard({
         <div className="mt-6 overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-900/5">
           <div className="flex items-center justify-between border-b border-stone-100 bg-[#E7EEE7] px-6 py-4">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D]">Student directory</div>
-              <div className="mt-0.5 text-lg font-bold">{dummyStudents.length} active students</div>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D]">Live Student Directory & Spend</div>
+              <div className="mt-0.5 text-lg font-bold">{dynamicStudents.length} Active Customers</div>
             </div>
             <div className="text-[11px] font-semibold text-stone-500">
-              Total spend this week: <span className="font-mono font-bold text-[#14532D]">₹{dummyStudents.reduce((s, x) => s + x.spend, 0)}</span>
+              Total Student Spend: <span className="font-mono font-bold text-[#14532D]">₹{dynamicStudents.reduce((s, x) => s + x.spend, 0)}</span>
             </div>
           </div>
           <div className="hidden grid-cols-12 gap-3 border-b border-stone-100 px-6 py-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-500 md:grid">
             <div className="col-span-4">Student</div>
-            <div className="col-span-2">Roll</div>
+            <div className="col-span-2">Roll / ID</div>
             <div className="col-span-2">Dept</div>
             <div className="col-span-1">Year</div>
             <div className="col-span-2">Spend</div>
             <div className="col-span-1 text-right">Orders</div>
           </div>
-          {dummyStudents.map((s) => {
+          {dynamicStudents.map((s, idx) => {
             const initials = s.name.split(" ").map((p) => p[0]).slice(0, 2).join("").toUpperCase();
             return (
-              <div key={s.roll} className="grid grid-cols-12 items-center gap-3 border-t border-stone-100 px-6 py-3 transition hover:bg-stone-50">
+              <div key={s.roll || idx} className="grid grid-cols-12 items-center gap-3 border-t border-stone-100 px-6 py-3 transition hover:bg-stone-50">
                 <div className="col-span-12 flex items-center gap-3 md:col-span-4">
                   <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#14532D] text-[11px] font-bold text-[#FCECC5]">
                     {initials}
