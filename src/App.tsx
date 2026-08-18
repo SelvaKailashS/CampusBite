@@ -58,6 +58,94 @@ const brand = {
   tomatoText: "text-[#D64545]",
 };
 
+/* Web Audio Synthesizer Chimes */
+function playReadyChime() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    [659.25, 783.99, 1046.50].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + i * 0.12);
+      gain.gain.setValueAtTime(0, now + i * 0.12);
+      gain.gain.linearRampToValueAtTime(0.3, now + i * 0.12 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.12 + 0.35);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + i * 0.12);
+      osc.stop(now + i * 0.12 + 0.35);
+    });
+  } catch (e) {
+    console.error("Audio error:", e);
+  }
+}
+
+function playKitchenBell() {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const now = ctx.currentTime;
+    [523.25, 783.99].forEach((freq) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.35, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.5);
+    });
+  } catch (e) {
+    console.error("Audio error:", e);
+  }
+}
+
+function exportSalesCSV(orders: Order[], canteens: Canteen[]) {
+  if (orders.length === 0) {
+    alert("No orders available to export.");
+    return;
+  }
+  const headers = [
+    "Order ID",
+    "Token",
+    "Student Name",
+    "Canteen",
+    "Total (INR)",
+    "Order Mode",
+    "Payment Method",
+    "Payment Status",
+    "Placed At",
+    "Scheduled Time",
+  ];
+  const rows = orders.map((o) => {
+    const canteenName = canteens.find((c) => c.id === o.canteenId)?.name || o.canteenId;
+    const timeStr = new Date(o.placedAt).toLocaleString();
+    return [
+      o.id,
+      o.token,
+      `"${o.student}"`,
+      `"${canteenName}"`,
+      o.total,
+      o.mode,
+      o.payment,
+      o.paymentStatus,
+      `"${timeStr}"`,
+      `"${o.scheduledTime || "ASAP"}"`,
+    ].join(",");
+  });
+
+  const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows].join("\n");
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `CampusBite_Sales_Report_${new Date().toISOString().split("T")[0]}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [dataVersion, setDataVersion] = useState(0);
@@ -233,7 +321,7 @@ export default function App() {
     pushToast(`Switched to ${canteens.find((c) => c.id === food.canteenId)?.name}`, "info");
   };
 
-  const placeOrder = async (payment: PaymentMode) => {
+  const placeOrder = async (payment: PaymentMode, scheduledTime?: string) => {
     if (cart.length === 0) return;
     const canteen = canteens.find((c) => c.id === cartCanteenId)!;
     const total = subtotal;
@@ -241,12 +329,13 @@ export default function App() {
       if (walletBalance < total) { pushToast("Insufficient wallet balance.", "warn"); return; }
     }
 
+    // Play kitchen bell notification sound for new order
+    playKitchenBell();
+
     // Try to save to REAL backend (Neon database)
     const token = localStorage.getItem("campusbite_token");
     if (token) {
       try {
-        // Foods in DB have numeric ids; our local foods have string slugs like "sp-cfr"
-        // The seed script uses those slugs, so we fetch numeric ids from the API first
         const foodsRes = await fetch(`/api/foods?canteenId=${canteen.id}`);
         const foodsData = await foodsRes.json();
         const slugToId = new Map((foodsData.foods || []).map((f: any) => [f.slug, f.id]));
@@ -294,6 +383,7 @@ export default function App() {
           student: dbOrder.studentName || user?.name || "Guest",
           payment: dbOrder.payment,
           paymentStatus: dbOrder.paymentStatus,
+          scheduledTime,
         };
         if (payment === "wallet") setWalletBalance((b) => b - total);
         setOrders((o) => [order, ...o]);
@@ -302,7 +392,7 @@ export default function App() {
         setCartOpen(false);
         setCheckoutOpen(false);
         setTrackingOrderId(order.id);
-        pushToast(`Token ${order.token} saved to database · ETA ${order.etaMin} min`);
+        pushToast(`Token ${order.token} saved to database · ETA ${order.etaMin} min 🔔`);
         return;
       } catch (e: any) {
         pushToast(`API error: ${e.message}. Saving locally.`, "warn");
@@ -325,6 +415,7 @@ export default function App() {
       student: user?.name ?? "Guest",
       payment,
       paymentStatus: payment === "counter-cash" ? "pending" : "paid",
+      scheduledTime,
     };
     setOrders((o) => [order, ...o]);
     setCart([]);
@@ -332,7 +423,7 @@ export default function App() {
     setCartOpen(false);
     setCheckoutOpen(false);
     setTrackingOrderId(order.id);
-    pushToast(`Token ${order.token} generated · ETA ${order.etaMin} min`);
+    pushToast(`Token ${order.token} generated · ETA ${order.etaMin} min 🔔`);
   };
 
   const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
@@ -1548,14 +1639,15 @@ function Checkout({
   location: DeliveryLocation;
   walletBalance: number;
   onClose: () => void;
-  onPay: (p: PaymentMode) => void;
+  onPay: (p: PaymentMode, scheduledTime?: string) => void;
 }) {
   const [payment, setPayment] = useState<PaymentMode>("online-upi");
+  const [scheduledTime, setScheduledTime] = useState<string>("ASAP");
   const [processing, setProcessing] = useState(false);
 
   const submit = () => {
     setProcessing(true);
-    setTimeout(() => { setProcessing(false); onPay(payment); }, payment === "counter-cash" ? 400 : 1200);
+    setTimeout(() => { setProcessing(false); onPay(payment, scheduledTime !== "ASAP" ? scheduledTime : undefined); }, payment === "counter-cash" ? 400 : 1200);
   };
 
   const online = paymentOptions.filter((p) => p.kind === "online");
@@ -1591,6 +1683,33 @@ function Checkout({
               </div>
               <div className="mt-1 text-xs text-stone-700">
                 {mode === "pickup" ? "Show your token at counter to collect." : `${location.block}, ${location.room} · R${location.row}/D${location.desk}`}
+              </div>
+            </div>
+
+            {/* Scheduled Pickup Timing Selector */}
+            <div className="mt-3 rounded-2xl bg-[#F6F2EA] p-3 border border-stone-200">
+              <div className="text-[10px] font-extrabold uppercase tracking-[0.2em] text-[#14532D]">Pickup Timing</div>
+              <div className="mt-2 grid grid-cols-2 gap-1.5">
+                {[
+                  { key: "ASAP", label: "⚡ ASAP (~10m)" },
+                  { key: "11:30 AM Break", label: "⏰ 11:30 AM Break" },
+                  { key: "1:15 PM Lunch", label: "🍱 1:15 PM Lunch" },
+                  { key: "3:45 PM Tea Break", label: "☕ 3:45 PM Tea" },
+                ].map((slot) => (
+                  <button
+                    type="button"
+                    key={slot.key}
+                    onClick={() => setScheduledTime(slot.key)}
+                    className={
+                      "rounded-xl border p-2 text-[11px] font-bold transition text-left cursor-pointer " +
+                      (scheduledTime === slot.key
+                        ? "border-[#14532D] bg-[#14532D] text-white shadow-sm"
+                        : "border-stone-200 bg-white text-stone-700 hover:border-stone-400")
+                    }
+                  >
+                    {slot.label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -3135,6 +3254,8 @@ const dummyStudents = [
   { name: "Arjun Nair", roll: "22EEE023", dept: "EEE", year: "3rd Year", spend: 90, orders: 1 },
 ];
 
+type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos";
+
 function AdminDashboard({
   orders, setOrders, user, bumpData, pushToast, onPreviewCanteen,
 }: {
@@ -3335,6 +3456,7 @@ function AdminDashboard({
       <div className="mt-6 flex flex-wrap gap-2">
         {([
           { k: "overview" as AdminTab, label: "Overview", icon: "📊" },
+          { k: "analytics" as AdminTab, label: "Analytics & CSV", icon: "📥" },
           { k: "canteens" as AdminTab, label: "Canteens", icon: "🏛" },
           { k: "menu" as AdminTab, label: "Menu items", icon: "🍽" },
           { k: "orders" as AdminTab, label: "Orders", icon: "📦" },
@@ -3472,6 +3594,84 @@ function AdminDashboard({
                 })}
               </ul>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ========= ANALYTICS & CSV ========= */}
+      {tab === "analytics" && (
+        <div className="mt-6 space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#0B1F16] to-[#14532D] p-6 text-white shadow-lg">
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-lime-200">Daily Financial Report</div>
+              <h3 className="mt-1 text-2xl font-extrabold">Sales Analytics &amp; CSV Export</h3>
+              <p className="mt-1 text-xs text-white/70">Export live order data directly to CSV spreadsheet format for bookkeeping.</p>
+            </div>
+            <button
+              onClick={() => exportSalesCSV(visibleOrders, canteens)}
+              className="inline-flex items-center gap-2 rounded-full bg-[#FCECC5] px-5 py-3 text-xs font-black text-[#0B1F16] shadow-lg hover:bg-white transition cursor-pointer"
+            >
+              📥 Export Sales Report (CSV) →
+            </button>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            <KPI label="Total Sales" value={`₹${revenue}`} accent="text-[#14532D]" />
+            <KPI label="Total Orders" value={String(totalOrders)} />
+            <KPI label="Avg Order Value" value={`₹${avgOrder}`} />
+            <KPI label="Online Paid %" value={`${paidPct}%`} accent="text-emerald-800" />
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-2">
+            {/* Revenue breakdown by canteen */}
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-900/5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D]">Revenue Share</div>
+              <h3 className="mt-1 text-xl font-bold">Canteen Sales Breakdown</h3>
+              <div className="mt-5 space-y-4">
+                {perCanteen.map((p) => (
+                  <div key={p.canteen.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="flex items-center gap-2">
+                        <span>{p.canteen.emoji}</span>
+                        <span>{p.canteen.name}</span>
+                      </span>
+                      <span className="font-mono text-[#14532D]">₹{p.revenue} ({p.count} orders)</span>
+                    </div>
+                    <div className="h-2.5 overflow-hidden rounded-full bg-stone-100">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#14532D] to-[#FCECC5]"
+                        style={{ width: `${maxCanteenRev > 0 ? (p.revenue / maxCanteenRev) * 100 : 0}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Top Bestselling Dishes */}
+            <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-900/5">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D]">Bestsellers</div>
+              <h3 className="mt-1 text-xl font-bold">Top Performing Items</h3>
+              {topDishes.length === 0 ? (
+                <div className="mt-6 rounded-2xl bg-stone-50 p-6 text-center text-xs text-stone-500">No sales recorded yet today.</div>
+              ) : (
+                <ol className="mt-4 space-y-3">
+                  {topDishes.map((d, i) => (
+                    <li key={d.name} className="flex items-center justify-between rounded-2xl border border-stone-100 bg-stone-50/60 p-3">
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-xs font-black text-stone-400">0{i + 1}</span>
+                        <span className="text-2xl">{d.emoji}</span>
+                        <div>
+                          <div className="text-sm font-bold text-stone-900">{d.name}</div>
+                          <div className="text-[11px] text-stone-500">{d.qty} portions sold</div>
+                        </div>
+                      </div>
+                      <div className="font-mono text-base font-extrabold text-[#14532D]">₹{d.revenue}</div>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -3964,9 +4164,13 @@ function KitchenPortal({ orders, setOrders, pushToast, user }: { orders: Order[]
     setOrders((prev) => prev.map((o) => {
       if (o.id !== id) return o;
       const max = o.mode === "pickup" ? pickupStages.length - 1 : orderStages.length - 1;
-      return { ...o, stage: Math.min(max, o.stage + 1) };
+      const nextStage = Math.min(max, o.stage + 1);
+      if (nextStage === 2) {
+        playReadyChime();
+      }
+      return { ...o, stage: nextStage };
     }));
-    pushToast("Order status updated", "info");
+    pushToast("Order status updated 🔔", "info");
   };
 
   return (

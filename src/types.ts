@@ -77,4 +77,5 @@ export interface Order {
   student: string;
   payment: PaymentMode;
   paymentStatus: PaymentStatus;
+  scheduledTime?: string;
 }
