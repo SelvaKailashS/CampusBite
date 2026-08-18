@@ -1666,8 +1666,25 @@ function Checkout({
               </div>
             )}
             {payment.startsWith("online") && (
-              <div className="mt-4 rounded-2xl bg-emerald-50 p-3 text-xs text-emerald-900">
-                🔒 Secure payment via Razorpay-style gateway. Instant refund if the order fails.
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Scan QR or Pay via Number</span>
+                  <span className="rounded-full bg-emerald-200/60 px-2 py-0.5 text-[9px] font-bold text-emerald-900">Campus UPI</span>
+                </div>
+                <div className="mt-3 flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
+                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-1">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${subtotal}&cu=INR`)}`}
+                      alt="CampusBite UPI QR Code"
+                      className="h-full w-full object-contain"
+                    />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">GPay / PhonePe / Paytm</div>
+                    <div className="font-mono text-base font-extrabold text-[#0B1F16]">📞 9360571671</div>
+                    <div className="text-[11px] text-emerald-800 font-bold">UPI ID: <span className="font-mono">9360571671@upi</span></div>
+                  </div>
+                </div>
               </div>
             )}
             {payment === "wallet" && (
@@ -4055,13 +4072,25 @@ function WalletTopUpModal({
           </div>
 
           {method === "upi" && (
-            <div className="flex items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-white shadow-sm text-xl font-bold border border-emerald-200">
-                📲
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-4 text-emerald-950">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-800">Scan & Pay via GPay / PhonePe / Paytm</span>
+                <span className="rounded-full bg-emerald-200/60 px-2 py-0.5 text-[9px] font-bold text-emerald-900">Official UPI</span>
               </div>
-              <div className="text-[11px] text-emerald-900">
-                <span className="font-bold">Instant Credit to Neon DB</span>
-                <p className="text-emerald-700">Simulated UPI gateway for NIET campus wallet.</p>
+              
+              <div className="mt-3 flex items-center gap-3 bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
+                <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg border border-stone-200 bg-white p-1">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`upi://pay?pa=9360571671@upi&pn=CampusBite&am=${finalAmount}&cu=INR`)}`}
+                    alt="CampusBite UPI QR Code"
+                    className="h-full w-full object-contain"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] uppercase tracking-wider text-stone-500 font-bold">Pay via Phone Number</div>
+                  <div className="font-mono text-base font-extrabold text-[#0B1F16]">📞 9360571671</div>
+                  <div className="text-[11px] text-emerald-800 font-bold">UPI ID: <span className="font-mono">9360571671@upi</span></div>
+                </div>
               </div>
             </div>
           )}
