@@ -274,14 +274,12 @@ export default function App() {
   const [filter, setFilter] = useState<FilterKey>("All");
   const [healthFilter, setHealthFilter] = useState<HealthTag>("all");
   const [pendingSwitch, setPendingSwitch] = useState<{ food: FoodItem } | null>(null);
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem("campusbite_orders");
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  // Clear stale cached local orders on mount
+  useEffect(() => {
+    localStorage.removeItem("campusbite_orders");
+  }, []);
 
   const [broadcast, setBroadcast] = useState<{
     id: string;
@@ -315,14 +313,7 @@ export default function App() {
     }
   }, [broadcast]);
 
-  // Save orders to localStorage whenever orders list changes
-  useEffect(() => {
-    try {
-      localStorage.setItem("campusbite_orders", JSON.stringify(orders));
-    } catch (e) {
-      console.error("Failed to save orders to localStorage", e);
-    }
-  }, [orders]);
+
 
   // Sync orders from DB API when user logs in & live auto-poll every 4s
   useEffect(() => {
@@ -3864,50 +3855,8 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
               )}
             </form>
 
-            {/* Divider */}
-            <div className="my-6 flex items-center gap-4 text-[10px] font-semibold uppercase tracking-[0.2em] text-stone-400">
-              <div className="h-px flex-1 bg-stone-200" />
-              ⚡ Instant Quick Demo Sign In
-              <div className="h-px flex-1 bg-stone-200" />
-            </div>
-
-            <div className="grid gap-2">
-              <button
-                type="button"
-                onClick={() => handleDemoLogin("selva@niet.ac.in", "student", { name: "Selva Kailash", roll: "721422104001", email: "selva@niet.ac.in", dept: "CSE", year: "3rd Year", role: "student" })}
-                className="flex items-center justify-between rounded-2xl border border-stone-200 bg-white p-3 text-left hover:border-[#14532D] hover:bg-stone-50 transition cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5 text-xs font-bold text-stone-800">
-                  <span>🎓</span> Demo Student (Selva Kailash)
-                </span>
-                <span className="text-[10px] font-extrabold text-[#14532D]">Login →</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin("rajesh.cse@niet.ac.in", "staff", { name: "Prof. Rajesh Kumar", roll: "FAC-CSE-012", email: "rajesh.cse@niet.ac.in", dept: "CSE Dept", year: "Assistant Professor", role: "staff", cabin: "Block A · Cabin A-204" })}
-                className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50/60 p-3 text-left hover:border-emerald-400 hover:bg-emerald-100/60 transition cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5 text-xs font-bold text-emerald-950">
-                  <span>👨‍🏫</span> Demo Faculty (Prof. Rajesh · Cabin A-204)
-                </span>
-                <span className="text-[10px] font-extrabold text-emerald-800">Login →</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleDemoLogin("admin.spicy@niet.ac.in", "admin", { name: "Spicy Canteen Manager", email: "admin.spicy@niet.ac.in", dept: "Canteen Operations", year: "Staff", role: "admin", canteenId: "spicy" })}
-                className="flex items-center justify-between rounded-2xl border border-amber-200 bg-amber-50/60 p-3 text-left hover:border-amber-400 hover:bg-amber-100/60 transition cursor-pointer"
-              >
-                <span className="flex items-center gap-2.5 text-xs font-bold text-amber-950">
-                  <span>🛡️</span> Demo Canteen Admin (Spicy Manager)
-                </span>
-                <span className="text-[10px] font-extrabold text-amber-800">Login →</span>
-              </button>
-            </div>
-
             <p className="mt-6 text-center text-[11px] text-stone-500">
-              By continuing you agree to CampusBite's <span className="font-semibold text-stone-700 underline underline-offset-2">Terms</span> & <span className="font-semibold text-stone-700 underline underline-offset-2">Food Hygiene Policy</span>.
+              By continuing you agree to CampusBite's <span className="font-semibold text-stone-700 underline underline-offset-2">Terms</span> &amp; <span className="font-semibold text-stone-700 underline underline-offset-2">Food Hygiene Policy</span>.
             </p>
           </div>
         </div>
