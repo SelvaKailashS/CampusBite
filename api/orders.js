@@ -14,10 +14,28 @@ function makeToken(canteenId) {
 export default async function handler(req, res) {
   setCors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
-  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   const auth = requireAuth(req, res);
   if (!auth) return;
+
+  if (req.method === "GET") {
+    try {
+      const where = auth.role === "admin" || auth.role === "super_admin"
+        ? (auth.canteenId ? { canteenId: auth.canteenId } : {})
+        : { userId: auth.id };
+
+      const orders = await prisma.order.findMany({
+        where,
+        include: { items: true, canteen: true },
+        orderBy: { placedAt: "desc" },
+      });
+      return res.json({ orders });
+    } catch (e) {
+      return res.status(500).json({ error: "Failed to fetch orders" });
+    }
+  }
+
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
     const { canteenId, items, mode, location, payment } = req.body;

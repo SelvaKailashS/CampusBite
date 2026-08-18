@@ -518,13 +518,18 @@ export default function App() {
       try {
         const foodsRes = await fetch(`/api/foods?canteenId=${canteen.id}`);
         const foodsData = await foodsRes.json();
-        const slugToId = new Map((foodsData.foods || []).map((f: any) => [f.slug, f.id]));
-
+        const dbFoods = foodsData.foods || [];
         const items = cartItems
-          .map((i) => ({ foodId: slugToId.get(i.foodId), qty: i.qty }))
-          .filter((i) => i.foodId != null);
-
-        if (items.length === 0) throw new Error("No matching foods in DB — did you seed?");
+          .map((i) => {
+            const matched = dbFoods.find(
+              (f: any) =>
+                f.id === Number(i.foodId) ||
+                f.slug === i.foodId ||
+                f.name.toLowerCase() === i.food.name.toLowerCase()
+            ) || dbFoods[0];
+            return matched ? { foodId: matched.id, qty: i.qty } : null;
+          })
+          .filter((i): i is { foodId: number; qty: number } => i !== null && i.foodId != null);
 
         const res = await fetch("/api/orders", {
           method: "POST",
