@@ -114,6 +114,7 @@ export default function App() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [trackingOrderId, setTrackingOrderId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [mobileMenu, setMobileMenu] = useState(false);
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [walletBalance, setWalletBalance] = useState(450);
 
