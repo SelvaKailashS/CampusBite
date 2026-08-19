@@ -20,7 +20,7 @@ const healthFilters: { key: HealthTag; label: string; icon: string }[] = [
   { key: "exam-focus", label: "Exam Focus", icon: "📚" },
   { key: "light-diet", label: "Light", icon: "🌿" },
   { key: "under-40", label: "Under ₹40", icon: "💰" },
-  { key: "jain", label: "Jain", icon: "🙏" },
+  { key: "Gain", label: "Gain", icon: "🙏" },
 ];
 
 const paymentOptions: { key: PaymentMode; label: string; sub: string; icon: string; kind: "online" | "offline" }[] = [
