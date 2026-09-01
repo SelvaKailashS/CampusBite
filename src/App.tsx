@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { canteens, foods, blocks, roomsByBlock, orderStages, pickupStages, comboDeals } from "./data";
+import { canteens, foods, blocks, roomsByBlock, orderStages, pickupStages, comboDeals, defaultRunners } from "./data";
 import type {
   CartItem, Canteen, FoodItem, DeliveryLocation, Order,
-  HealthTag, OrderMode, PaymentMode,
+  HealthTag, OrderMode, PaymentMode, DeliveryRunner, GroupSplitMember,
 } from "./types";
 
 type Toast = { id: number; msg: string; kind: "success" | "info" | "warn" };
@@ -275,6 +275,51 @@ export default function App() {
   const [healthFilter, setHealthFilter] = useState<HealthTag>("all");
   const [pendingSwitch, setPendingSwitch] = useState<{ food: FoodItem } | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+
+  const [runners, setRunners] = useState<DeliveryRunner[]>(() => {
+    try {
+      const saved = localStorage.getItem("campusbite_runners");
+      return saved ? JSON.parse(saved) : defaultRunners;
+    } catch {
+      return defaultRunners;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("campusbite_runners", JSON.stringify(runners));
+    } catch (e) {
+      console.error("Failed to save runners to localStorage", e);
+    }
+  }, [runners]);
+
+  const assignRunnerToOrder = (orderId: string, runnerId: string) => {
+    const runner = runners.find((r) => r.id === runnerId);
+    if (!runner) {
+      setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, runnerId: undefined, runnerName: undefined, runnerPhone: undefined } : o)));
+      return;
+    }
+
+    setOrders((prev) =>
+      prev.map((o) => {
+        if (o.id === orderId) {
+          const nextStage = o.mode === "delivery" && o.stage < 3 ? 3 : o.stage;
+          return {
+            ...o,
+            runnerId: runner.id,
+            runnerName: runner.name,
+            runnerPhone: runner.phone,
+            stage: nextStage,
+          };
+        }
+        return o;
+      })
+    );
+
+    setRunners((prev) =>
+      prev.map((r) => (r.id === runnerId ? { ...r, status: "on-delivery", deliveriesCount: r.deliveriesCount + 1 } : r))
+    );
+  };
 
   // Clear stale cached local orders on mount
   useEffect(() => {
@@ -968,6 +1013,9 @@ export default function App() {
           setActiveTab={setActiveAdminTab}
           broadcast={broadcast}
           setBroadcast={setBroadcast}
+          runners={runners}
+          setRunners={setRunners}
+          assignRunnerToOrder={assignRunnerToOrder}
         />
       ) : view === "kitchen" ? (
         <KitchenPortal orders={orders} setOrders={setOrders} pushToast={pushToast} user={user} />
@@ -2446,8 +2494,38 @@ function OrderTrackerModal({ order, canteen, onClose, onCancelOrder, onOpenInvoi
           </div>
 
           {order.mode === "delivery" && order.location && (
-            <div className="mt-3 rounded-2xl bg-[#E7EEE7] p-3 text-xs text-[#14532D]">
-              📍 Delivering to <span className="font-bold">{order.location.block}, {order.location.room}, Row {order.location.row}, Desk {order.location.desk}</span>
+            <div className="mt-3 space-y-2">
+              <div className="rounded-2xl bg-[#E7EEE7] p-3 text-xs text-[#14532D]">
+                📍 Desk Delivery to <span className="font-bold">{order.location.block}, {order.location.room}, Row {order.location.row}, Desk {order.location.desk}</span>
+              </div>
+
+              {order.runnerName ? (
+                <div className="flex items-center justify-between rounded-2xl border-2 border-emerald-400 bg-emerald-50 p-3.5 shadow-sm">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#14532D] text-xl text-white shadow-md">
+                      🛵
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-extrabold uppercase tracking-widest text-emerald-800">Delivery Executive Assigned</div>
+                      <div className="font-bold text-stone-900 text-sm">{order.runnerName}</div>
+                      <div className="text-[11px] font-semibold text-stone-500">Bringing food directly to your desk</div>
+                    </div>
+                  </div>
+                  {order.runnerPhone && (
+                    <a
+                      href={`tel:${order.runnerPhone}`}
+                      className="flex items-center gap-1.5 rounded-full bg-[#14532D] px-3.5 py-2 text-xs font-black text-[#FCECC5] shadow-md hover:bg-[#0B1F16] transition"
+                    >
+                      <span>📞 Call</span>
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-300 bg-amber-50 p-3 text-xs font-bold text-amber-900 flex items-center justify-between">
+                  <span>🛵 Delivery runner will be assigned shortly by canteen staff...</span>
+                  <span className="font-mono text-[10px] uppercase bg-amber-200 px-2 py-0.5 rounded-full">Pending</span>
+                </div>
+              )}
             </div>
           )}
 
@@ -4366,8 +4444,204 @@ function FacultySecurityManager({ pushToast }: { pushToast: (m: string, k?: Toas
   );
 }
 
+function AdminDeliveryRunnerManager({
+  runners,
+  setRunners,
+  orders,
+  pushToast,
+}: {
+  runners: DeliveryRunner[];
+  setRunners: React.Dispatch<React.SetStateAction<DeliveryRunner[]>>;
+  orders: Order[];
+  pushToast: (m: string, k?: Toast["kind"]) => void;
+}) {
+  const [newName, setNewName] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newAvatar, setNewAvatar] = useState("🛵");
+
+  const handleAddRunner = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newPhone.trim()) {
+      pushToast("Please provide runner name and phone number", "warn");
+      return;
+    }
+    const newRunner: DeliveryRunner = {
+      id: `runner-${Date.now()}`,
+      name: newName.trim(),
+      phone: newPhone.trim(),
+      status: "available",
+      avatar: newAvatar,
+      deliveriesCount: 0,
+    };
+    setRunners((prev) => [...prev, newRunner]);
+    setNewName("");
+    setNewPhone("");
+    pushToast(`Registered Delivery Executive ${newRunner.name}`, "success");
+  };
+
+  const toggleRunnerStatus = (id: string) => {
+    setRunners((prev) =>
+      prev.map((r) => {
+        if (r.id === id) {
+          const nextStatus: DeliveryRunner["status"] =
+            r.status === "available" ? "on-delivery" : r.status === "on-delivery" ? "off-duty" : "available";
+          pushToast(`${r.name} status set to ${nextStatus.toUpperCase()}`);
+          return { ...r, status: nextStatus };
+        }
+        return r;
+      })
+    );
+  };
+
+  const removeRunner = (id: string, name: string) => {
+    if (confirm(`Remove delivery runner ${name}?`)) {
+      setRunners((prev) => prev.filter((r) => r.id !== id));
+      pushToast(`Removed ${name}`, "info");
+    }
+  };
+
+  const availableCount = runners.filter((r) => r.status === "available").length;
+  const onDeliveryCount = runners.filter((r) => r.status === "on-delivery").length;
+
+  return (
+    <div className="mt-6 space-y-6">
+      {/* Header Banner */}
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#0B1F16] to-[#14532D] p-6 text-white shadow-lg">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-lime-200">
+            Desk Delivery Logistics Management
+          </div>
+          <h3 className="mt-1 text-2xl font-extrabold">Delivery Runners &amp; Executives</h3>
+          <p className="mt-1 text-xs text-white/70">
+            Assign runners to desk delivery orders across Block A, B, C &amp; D classrooms.
+          </p>
+        </div>
+        <div className="flex gap-2 text-xs font-bold">
+          <span className="rounded-full bg-emerald-500/30 border border-emerald-300/40 px-3.5 py-1.5 text-emerald-200">
+            🟢 {availableCount} Available
+          </span>
+          <span className="rounded-full bg-amber-500/30 border border-amber-300/40 px-3.5 py-1.5 text-amber-200">
+            🛵 {onDeliveryCount} On Delivery
+          </span>
+        </div>
+      </div>
+
+      {/* Add New Runner Form */}
+      <div className="rounded-3xl bg-white p-6 shadow-sm ring-1 ring-stone-900/5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#14532D]">Register New Delivery Executive</div>
+        <form onSubmit={handleAddRunner} className="mt-3 flex flex-wrap items-end gap-3">
+          <div className="w-28">
+            <label className="text-[10px] font-bold text-stone-500 uppercase">Vehicle/Icon</label>
+            <select
+              value={newAvatar}
+              onChange={(e) => setNewAvatar(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-stone-200 bg-stone-50 p-2.5 text-sm font-bold outline-none focus:border-[#14532D]"
+            >
+              <option value="🛵">🛵 Scooter</option>
+              <option value="🚲">🚲 Bicycle</option>
+              <option value="🏃">🏃 Runner</option>
+              <option value="⚡">⚡ Express</option>
+            </select>
+          </div>
+          <div className="flex-1 min-w-[180px]">
+            <label className="text-[10px] font-bold text-stone-500 uppercase">Runner Name</label>
+            <input
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="e.g. Ramesh Kumar"
+              className="mt-1 w-full rounded-xl border border-stone-200 px-3.5 py-2.5 text-xs font-bold outline-none focus:border-[#14532D]"
+            />
+          </div>
+          <div className="flex-1 min-w-[160px]">
+            <label className="text-[10px] font-bold text-stone-500 uppercase">Phone Number</label>
+            <input
+              type="tel"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              placeholder="e.g. 9876543210"
+              className="mt-1 w-full rounded-xl border border-stone-200 px-3.5 py-2.5 text-xs font-bold outline-none focus:border-[#14532D]"
+            />
+          </div>
+          <button
+            type="submit"
+            className="rounded-xl bg-[#0B1F16] px-5 py-2.5 text-xs font-black text-white hover:bg-[#14532D] transition cursor-pointer"
+          >
+            + Register Runner
+          </button>
+        </form>
+      </div>
+
+      {/* Runners Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {runners.map((r) => {
+          const assignedOrders = orders.filter((o) => o.runnerId === r.id && o.stage < 5);
+          return (
+            <div key={r.id} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-900/5 flex flex-col justify-between space-y-4">
+              <div>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-stone-100 text-2xl shadow-inner">
+                      {r.avatar}
+                    </div>
+                    <div>
+                      <div className="font-extrabold text-stone-900">{r.name}</div>
+                      <a href={`tel:${r.phone}`} className="font-mono text-xs font-bold text-[#14532D] hover:underline">
+                        📞 {r.phone}
+                      </a>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => removeRunner(r.id, r.name)}
+                    className="text-stone-300 hover:text-rose-600 text-xs font-bold p-1 cursor-pointer"
+                    title="Remove runner"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between text-xs border-t border-stone-100 pt-3">
+                  <span className="text-stone-500 font-medium">Deliveries:</span>
+                  <span className="font-mono font-black text-[#14532D]">{r.deliveriesCount} completed</span>
+                </div>
+
+                {assignedOrders.length > 0 && (
+                  <div className="mt-2 rounded-xl bg-amber-50 border border-amber-200 p-2 text-[11px] font-bold text-amber-900">
+                    🛵 Active: {assignedOrders.map((o) => `#${o.token}`).join(", ")}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 pt-2 border-t border-stone-100">
+                <button
+                  onClick={() => toggleRunnerStatus(r.id)}
+                  className={"flex-1 rounded-full py-2 text-[11px] font-black uppercase tracking-wider transition cursor-pointer text-center " +
+                    (r.status === "available"
+                      ? "bg-emerald-100 text-emerald-900 border border-emerald-300"
+                      : r.status === "on-delivery"
+                      ? "bg-amber-100 text-amber-900 border border-amber-300 animate-pulse"
+                      : "bg-stone-100 text-stone-500 border border-stone-200")}
+                >
+                  {r.status === "available" ? "🟢 Available" : r.status === "on-delivery" ? "🛵 On Delivery" : "⚪ Off-Duty"}
+                </button>
+                <a
+                  href={`tel:${r.phone}`}
+                  className="rounded-full bg-[#0B1F16] p-2 text-white hover:bg-[#14532D] transition"
+                  title="Call Runner"
+                >
+                  📞
+                </a>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AdminDashboard({
-  orders, setOrders, user, bumpData, pushToast, onPreviewCanteen, activeTab, setActiveTab, broadcast, setBroadcast,
+  orders, setOrders, user, bumpData, pushToast, onPreviewCanteen, activeTab, setActiveTab, broadcast, setBroadcast, runners, setRunners, assignRunnerToOrder,
 }: {
   orders: Order[];
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
@@ -4379,6 +4653,9 @@ function AdminDashboard({
   setActiveTab?: (tab: AdminTab) => void;
   broadcast?: any;
   setBroadcast?: any;
+  runners: DeliveryRunner[];
+  setRunners: React.Dispatch<React.SetStateAction<DeliveryRunner[]>>;
+  assignRunnerToOrder: (orderId: string, runnerId: string) => void;
 }) {
   // Scope: if user.canteenId is set, this admin is strictly scoped to ONE canteen only
   const scopedCanteenId = user.canteenId;
@@ -4685,6 +4962,7 @@ function AdminDashboard({
           { k: "combos" as AdminTab, label: "Combos", icon: "🎁" },
           { k: "security" as AdminTab, label: "Faculty Passcode", icon: "🔐" },
           { k: "broadcast" as AdminTab, label: "Announcements", icon: "📢" },
+          { k: "runners" as AdminTab, label: "Delivery Runners", icon: "🛵" },
         ]).map((t) => (
           <button
             key={t.k}
@@ -5225,6 +5503,56 @@ function AdminDashboard({
                       {o.items.map((i) => `${i.emoji || "🍽"} ${i.name} × ${i.qty}`).join(", ")}
                     </div>
 
+                    {/* Desk Delivery Location & Runner Assignment Box */}
+                    {o.mode === "delivery" && (
+                      <div className="mt-3 rounded-2xl bg-[#E7EEE7] p-3 border border-emerald-200">
+                        <div className="flex items-center justify-between text-xs font-bold text-[#14532D]">
+                          <span>📍 Desk Delivery Location:</span>
+                          <span className="font-mono">{o.location?.block}, {o.location?.room}</span>
+                        </div>
+                        <div className="mt-0.5 text-[11px] text-stone-600 font-semibold">
+                          Row {o.location?.row}, Desk {o.location?.desk}
+                        </div>
+
+                        <div className="mt-2.5 pt-2 border-t border-emerald-200/60">
+                          {o.runnerName ? (
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-1.5 text-xs font-black text-[#0B1F16]">
+                                <span>🛵 Assigned Executive:</span>
+                                <span className="text-[#14532D]">{o.runnerName}</span>
+                                <a href={`tel:${o.runnerPhone}`} className="font-mono text-[11px] text-emerald-800 underline">
+                                  (📞 {o.runnerPhone})
+                                </a>
+                              </div>
+                              <button
+                                onClick={() => assignRunnerToOrder(o.id, "")}
+                                className="text-[10px] font-bold text-stone-500 hover:text-stone-800 underline cursor-pointer"
+                              >
+                                Reassign
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <div className="text-[10px] font-extrabold uppercase text-amber-900">Assign Delivery Runner:</div>
+                              <div className="flex flex-wrap gap-1.5">
+                                {runners
+                                  .filter((r) => r.status !== "off-duty")
+                                  .map((r) => (
+                                    <button
+                                      key={r.id}
+                                      onClick={() => assignRunnerToOrder(o.id, r.id)}
+                                      className="rounded-full border border-emerald-600 bg-white px-2.5 py-1 text-[10px] font-extrabold text-[#14532D] hover:bg-[#14532D] hover:text-white transition cursor-pointer shadow-xs"
+                                    >
+                                      {r.avatar} {r.name.split(" ")[0]}
+                                    </button>
+                                  ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
                     {/* Progress bar */}
                     <div className="mt-3 flex items-center gap-1">
                       {stages.map((_, i) => (
@@ -5390,6 +5718,16 @@ function AdminDashboard({
       {/* ========= BROADCAST & ANNOUNCEMENTS ========= */}
       {tab === "broadcast" && (
         <AdminBroadcastManager broadcast={broadcast} setBroadcast={setBroadcast} pushToast={pushToast} />
+      )}
+
+      {/* ========= DELIVERY RUNNERS & LOGISTICS ========= */}
+      {tab === "runners" && (
+        <AdminDeliveryRunnerManager
+          runners={runners}
+          setRunners={setRunners}
+          orders={visibleOrders}
+          pushToast={pushToast}
+        />
       )}
     </main>
   );

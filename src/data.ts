@@ -235,3 +235,10 @@ export const pickupStages = [
   { key: "ready", label: "Ready for Pickup", emoji: "🎟️", desc: "Show your token at the counter" },
   { key: "collected", label: "Collected", emoji: "🎉", desc: "Enjoy your meal!" },
 ];
+
+export const defaultRunners = [
+  { id: "runner-1", name: "Ramesh Kumar", phone: "9876543210", status: "available" as const, avatar: "🛵", deliveriesCount: 14 },
+  { id: "runner-2", name: "Vikas Singh", phone: "9876543211", status: "available" as const, avatar: "🚲", deliveriesCount: 9 },
+  { id: "runner-3", name: "Suresh R.", phone: "9876543212", status: "on-delivery" as const, avatar: "🏃", deliveriesCount: 21 },
+  { id: "runner-4", name: "Kiran Patel", phone: "9876543213", status: "available" as const, avatar: "⚡", deliveriesCount: 17 },
+];

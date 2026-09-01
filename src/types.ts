@@ -70,6 +70,15 @@ export interface GroupSplitMember {
   paid?: boolean;
 }
 
+export interface DeliveryRunner {
+  id: string;
+  name: string;
+  phone: string;
+  status: "available" | "on-delivery" | "off-duty";
+  avatar: string;
+  deliveriesCount: number;
+}
+
 export interface Order {
   id: string;
   token: string;
@@ -88,4 +97,7 @@ export interface Order {
   isGroupOrder?: boolean;
   groupMembers?: GroupSplitMember[];
   isFacultyOrder?: boolean;
+  runnerId?: string;
+  runnerName?: string;
+  runnerPhone?: string;
 }
