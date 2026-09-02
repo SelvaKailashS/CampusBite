@@ -1597,7 +1597,7 @@ export default function App() {
       {trackingOrder && (
         <OrderTrackerModal
           order={trackingOrder}
-          canteen={canteens.find((c) => c.id === trackingOrder.canteenId)!}
+          canteen={canteens.find((c) => c.id === trackingOrder.canteenId) || canteens[0]}
           onClose={() => setTrackingOrderId(null)}
           onCancelOrder={cancelStudentOrder}
           onOpenInvoice={(o) => setInvoiceModalOrder(o)}
@@ -3043,7 +3043,7 @@ function OrdersView({ orders, onTrack, onCancelOrder }: { orders: Order[]; onTra
 }
 
 function OrderRow({ order, onTrack, onCancelOrder }: { order: Order; onTrack: () => void; onCancelOrder?: (id: string) => void; }) {
-  const c = canteens.find((x) => x.id === order.canteenId)!;
+  const c = canteens.find((x) => x.id === order.canteenId) || canteens[0];
   const stages = order.mode === "pickup" ? pickupStages : orderStages;
   const done = order.stage >= stages.length - 1;
   const canCancel = order.stage < 2;
@@ -3056,7 +3056,7 @@ function OrderRow({ order, onTrack, onCancelOrder }: { order: Order; onTrack: ()
           <div className="mt-1 font-mono text-4xl font-bold tracking-[0.15em] text-[#0B1F16]">{order.token}</div>
           <div className="mt-1 text-xs font-semibold text-stone-500">{c.name} · #{order.id}</div>
           <div className="mt-2 text-xs text-stone-500 line-clamp-1">
-            {order.items.map((i) => `${i.name} ×${i.qty}`).join(", ")}
+            {(order.items || []).map((i) => `${i.name} ×${i.qty}`).join(", ")}
           </div>
         </div>
         <div className="text-right">
