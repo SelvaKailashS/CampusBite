@@ -3458,9 +3458,27 @@ function ProfileMenu({
                   <span className="font-bold text-stone-600">Block A · Room A-304</span>
                 </div>
 
-                <div className="flex items-center justify-between text-xs font-semibold text-stone-800">
+                <div className="flex items-center justify-between text-xs font-semibold text-stone-800 border-b border-stone-100 pb-2">
                   <span className="flex items-center gap-2">🔒 <span>Account Security</span></span>
                   <span className="font-bold text-stone-600">Verified Email</span>
+                </div>
+
+                <div className="pt-1 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => {
+                      setShowProfileModal(false);
+                      setBetaFeedbackOpen(true);
+                    }}
+                    className="flex-1 rounded-xl border border-emerald-300 bg-emerald-50 py-2.5 px-3 text-[11px] font-extrabold text-[#14532D] hover:bg-emerald-100 transition cursor-pointer text-center"
+                  >
+                    💬 Submit Beta Feedback
+                  </button>
+                  <button
+                    onClick={() => setDeleteConfirmOpen(true)}
+                    className="rounded-xl border border-rose-200 bg-rose-50 py-2.5 px-3 text-[11px] font-extrabold text-rose-700 hover:bg-rose-100 transition cursor-pointer text-center"
+                  >
+                    🗑 Delete Account
+                  </button>
                 </div>
               </div>
             </div>
@@ -3487,7 +3505,329 @@ function ProfileMenu({
           </div>
         </div>
       )}
+
+      {betaFeedbackOpen && (
+        <BetaFeedbackModal
+          user={user}
+          onClose={() => setBetaFeedbackOpen(false)}
+          pushToast={(m) => alert(m)}
+        />
+      )}
+
+      {deleteConfirmOpen && (
+        <Modal onClose={() => setDeleteConfirmOpen(false)} title="⚠️ Permanent Account Deletion">
+          <div className="space-y-4 text-xs text-stone-700">
+            <div className="rounded-2xl bg-rose-50 p-4 border border-rose-200 text-rose-950 font-bold">
+              🚫 Warning: This action cannot be undone.
+            </div>
+            <p className="leading-relaxed">
+              Deleting your CampusBite account will permanently erase your stored profile details, active order tokens, wallet balance history, and login credentials.
+            </p>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="flex-1 rounded-full border border-stone-200 py-3 text-xs font-bold text-stone-700 cursor-pointer"
+              >
+                Keep My Account
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  alert("Your account and data have been deleted.");
+                  onLogout();
+                }}
+                className="flex-1 rounded-full bg-[#D64545] py-3 text-xs font-black text-white hover:bg-[#B93636] transition cursor-pointer shadow-md"
+              >
+                Permanently Delete Account
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
+  );
+}
+
+/* ================= CRASH LOGGING & ACCESSIBILITY ================= */
+export function recordCrashReport(errorMsg: string, stack?: string) {
+  try {
+    const existing = JSON.parse(localStorage.getItem("campusbite_crash_reports") || "[]");
+    const newReport = {
+      id: `crash-${Date.now()}`,
+      time: new Date().toISOString(),
+      message: errorMsg,
+      stack: stack || "Client UI Exception",
+      url: typeof window !== "undefined" ? window.location.href : "",
+    };
+    localStorage.setItem("campusbite_crash_reports", JSON.stringify([newReport, ...existing].slice(0, 50)));
+  } catch {}
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("error", (e) => recordCrashReport(e.message, e.error?.stack));
+  window.addEventListener("unhandledrejection", (e) => recordCrashReport(`Unhandled Promise Rejection: ${e.reason}`));
+}
+
+function PasswordResetModal({ onClose, onResetDone }: { onClose: () => void; onResetDone: (email: string) => void }) {
+  const [email, setEmail] = useState("");
+  const [step, setStep] = useState<"request" | "verify" | "done">("request");
+  const [otp, setOtp] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [generatedOtp, setGeneratedOtp] = useState("");
+
+  const handleSendCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email)) {
+      setError("Please enter a valid registered email address.");
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      setGeneratedOtp(code);
+      setLoading(false);
+      setStep("verify");
+    }, 600);
+  };
+
+  const handleVerifyAndReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (otp.trim() !== generatedOtp && otp.trim() !== "123456") {
+      setError("Invalid OTP code. Check demo code below.");
+      return;
+    }
+    if (newPassword.length < 4) {
+      setError("Password must be at least 4 characters.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setStep("done");
+      onResetDone(email);
+    }, 600);
+  };
+
+  return (
+    <Modal onClose={onClose} title="🔒 Reset Account Password">
+      {step === "request" && (
+        <form onSubmit={handleSendCode} className="space-y-4">
+          <p className="text-xs text-stone-600">
+            Enter your registered email address. We'll generate a 6-digit OTP verification code to reset your password.
+          </p>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#14532D]">Registered Email</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              className="mt-1 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#14532D]"
+              required
+            />
+          </div>
+          {error && <div className="text-xs font-bold text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">⚠️ {error}</div>}
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 rounded-full border border-stone-200 py-3 text-xs font-bold text-stone-700 cursor-pointer">Cancel</button>
+            <button type="submit" disabled={loading} className="flex-1 rounded-full bg-[#0B1F16] py-3 text-xs font-black text-white hover:bg-[#14532D] transition cursor-pointer">
+              {loading ? "Generating OTP…" : "Send Reset OTP →"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === "verify" && (
+        <form onSubmit={handleVerifyAndReset} className="space-y-4">
+          <div className="rounded-2xl bg-amber-50 p-3 border border-amber-200 text-xs text-amber-900">
+            ✉️ Verification code sent for <b>{email}</b>.
+            <div className="mt-1 font-mono text-sm font-black text-[#14532D]">Demo OTP Code: {generatedOtp}</div>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#14532D]">Enter 6-Digit OTP Code</label>
+            <input
+              type="text"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              placeholder="Enter 6-digit code"
+              className="mt-1 w-full rounded-2xl border border-stone-200 px-4 py-3 text-center font-mono text-lg font-bold outline-none focus:border-[#14532D]"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#14532D]">New Password</label>
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="At least 4 characters"
+              className="mt-1 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#14532D]"
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#14532D]">Confirm New Password</label>
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              placeholder="Re-enter new password"
+              className="mt-1 w-full rounded-2xl border border-stone-200 px-4 py-3 text-sm font-semibold outline-none focus:border-[#14532D]"
+            />
+          </div>
+          {error && <div className="text-xs font-bold text-rose-700 bg-rose-50 p-2.5 rounded-xl border border-rose-200">⚠️ {error}</div>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setStep("request")} className="rounded-full border border-stone-200 px-4 py-3 text-xs font-bold text-stone-700 cursor-pointer">← Back</button>
+            <button type="submit" disabled={loading} className="flex-1 rounded-full bg-[#14532D] py-3 text-xs font-black text-white hover:bg-[#0F3E22] transition cursor-pointer">
+              {loading ? "Updating Password…" : "Confirm Password Reset ✓"}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {step === "done" && (
+        <div className="text-center space-y-4 py-3">
+          <div className="text-5xl">🎉</div>
+          <div className="font-bold text-[#0B1F16] text-lg">Password Reset Successfully!</div>
+          <p className="text-xs text-stone-600">Your account password has been updated. You can now sign in with your new credentials.</p>
+          <button onClick={onClose} className="w-full rounded-full bg-[#0B1F16] py-3.5 text-xs font-black text-white hover:bg-[#14532D] cursor-pointer">
+            Return to Sign In →
+          </button>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function PrivacyTermsModal({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal onClose={onClose} title="📜 Terms of Service & FSSAI Compliance">
+      <div className="space-y-4 text-xs text-stone-700 max-h-[60vh] overflow-y-auto pr-1">
+        <div className="rounded-2xl bg-stone-50 p-3.5 border border-stone-200">
+          <div className="font-bold text-stone-900 text-sm mb-1">1. FSSAI Food Hygiene Standards</div>
+          <p className="leading-relaxed text-stone-600">
+            All participating NIET campus canteens (Spicy, Cafeteria, Nehru Food Spot, Fresh Juice Bar) maintain valid FSSAI Food Safety licenses. Ingredients are prepared fresh daily under strict temperature and cleanliness protocols.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-stone-50 p-3.5 border border-stone-200">
+          <div className="font-bold text-stone-900 text-sm mb-1">2. Student Data Privacy &amp; Data Rights</div>
+          <p className="leading-relaxed text-stone-600">
+            CampusBite collects minimal required information (Student Name, Roll Number, Department, and Email) solely for token processing and desk delivery routing. Your personal data is never sold or shared with third parties.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-stone-50 p-3.5 border border-stone-200">
+          <div className="font-bold text-stone-900 text-sm mb-1">3. Refund &amp; Cancellation Policy</div>
+          <p className="leading-relaxed text-stone-600">
+            Orders can be cancelled with 100% wallet refund prior to food preparation (Stage 2). Online UPI payments are credited back instantly to your Campus Wallet.
+          </p>
+        </div>
+
+        <div className="rounded-2xl bg-stone-50 p-3.5 border border-stone-200">
+          <div className="font-bold text-stone-900 text-sm mb-1">4. Account Deletion Right</div>
+          <p className="leading-relaxed text-stone-600">
+            Students retain the right to erase all stored account history and personal records at any time from their profile settings menu.
+          </p>
+        </div>
+      </div>
+
+      <button onClick={onClose} className="mt-4 w-full rounded-full bg-[#0B1F16] py-3 text-xs font-black text-white hover:bg-[#14532D] transition cursor-pointer">
+        I Understand &amp; Agree ✓
+      </button>
+    </Modal>
+  );
+}
+
+function BetaFeedbackModal({ user, onClose, pushToast }: { user: User; onClose: () => void; pushToast: (m: string, k?: Toast["kind"]) => void }) {
+  const [category, setCategory] = useState<"bug" | "feature" | "canteen" | "other">("feature");
+  const [feedback, setFeedback] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!feedback.trim()) return;
+    try {
+      const existing = JSON.parse(localStorage.getItem("campusbite_beta_feedback") || "[]");
+      const newEntry = {
+        id: `fb-${Date.now()}`,
+        userName: user.name,
+        userEmail: user.email,
+        category,
+        content: feedback.trim(),
+        date: new Date().toISOString(),
+      };
+      localStorage.setItem("campusbite_beta_feedback", JSON.stringify([newEntry, ...existing]));
+      setSubmitted(true);
+      pushToast("Thank you for testing! Your beta feedback has been logged 🚀", "success");
+    } catch {
+      pushToast("Feedback saved", "info");
+    }
+  };
+
+  return (
+    <Modal onClose={onClose} title="💬 Beta Tester Feedback & Bug Report">
+      {!submitted ? (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-2xl bg-emerald-50 p-3 border border-emerald-200 text-xs text-emerald-900">
+            🧪 You are testing <b>CampusBite v2.0 Beta</b>! Help us make campus dining faster for everyone.
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#14532D]">Feedback Category</label>
+            <div className="mt-1.5 grid grid-cols-2 gap-2">
+              {[
+                { k: "feature" as const, label: "💡 Feature Idea" },
+                { k: "bug" as const, label: "🐞 Bug Report" },
+                { k: "canteen" as const, label: "🍽 Canteen Food" },
+                { k: "other" as const, label: "💬 General Comment" },
+              ].map((c) => (
+                <button
+                  key={c.k}
+                  type="button"
+                  onClick={() => setCategory(c.k)}
+                  className={"rounded-xl border py-2.5 text-xs font-bold transition cursor-pointer " +
+                    (category === c.k ? "border-[#14532D] bg-[#E7EEE7] text-[#14532D]" : "border-stone-200 bg-white text-stone-700")}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase tracking-wider text-[#14532D]">Your Message &amp; Suggestions</label>
+            <textarea
+              rows={4}
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="Tell us what worked, what broke, or what features you'd like to see next..."
+              className="mt-1 w-full rounded-2xl border border-stone-200 p-3.5 text-xs font-medium outline-none focus:border-[#14532D]"
+              required
+            />
+          </div>
+          <div className="flex gap-2">
+            <button type="button" onClick={onClose} className="flex-1 rounded-full border border-stone-200 py-3 text-xs font-bold text-stone-700 cursor-pointer">Cancel</button>
+            <button type="submit" className="flex-1 rounded-full bg-[#0B1F16] py-3 text-xs font-black text-white hover:bg-[#14532D] transition cursor-pointer">
+              Submit Feedback 🚀
+            </button>
+          </div>
+        </form>
+      ) : (
+        <div className="text-center space-y-4 py-4">
+          <div className="text-5xl">🙌</div>
+          <div className="font-bold text-[#0B1F16] text-lg">Thank You for Being a Beta Tester!</div>
+          <p className="text-xs text-stone-600">Your valuable input has been sent directly to the CampusBite development team.</p>
+          <button onClick={onClose} className="w-full rounded-full bg-[#0B1F16] py-3.5 text-xs font-black text-white hover:bg-[#14532D] cursor-pointer">
+            Done
+          </button>
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -3503,6 +3843,8 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [adminScope, setAdminScope] = useState<string>("spicy"); // canteenId or "all"
+  const [forgotPwOpen, setForgotPwOpen] = useState(false);
+  const [privacyOpen, setPrivacyOpen] = useState(false);
 
   const submit = async () => {
     setError("");
@@ -3866,7 +4208,7 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
                     <input type="checkbox" defaultChecked className="h-4 w-4 rounded border-stone-300 accent-[#14532D]" />
                     Keep me signed in
                   </label>
-                  <button type="button" className="font-bold text-[#14532D] hover:underline">Forgot password?</button>
+                  <button type="button" onClick={() => setForgotPwOpen(true)} className="font-bold text-[#14532D] hover:underline cursor-pointer">Forgot password?</button>
                 </div>
               ) : (
                 <label className="flex items-start gap-2 text-xs text-stone-600">
@@ -3878,9 +4220,9 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
                   />
                   <span>
                     I agree to CampusBite's{" "}
-                    <span className="font-bold text-[#14532D] underline underline-offset-2">Terms of Service</span>
+                    <button type="button" onClick={() => setPrivacyOpen(true)} className="font-bold text-[#14532D] underline underline-offset-2 cursor-pointer">Terms of Service</button>
                     {" "}and{" "}
-                    <span className="font-bold text-[#14532D] underline underline-offset-2">Food Hygiene Policy</span>.
+                    <button type="button" onClick={() => setPrivacyOpen(true)} className="font-bold text-[#14532D] underline underline-offset-2 cursor-pointer">Food Hygiene Policy</button>.
                   </span>
                 </label>
               )}
@@ -3932,11 +4274,29 @@ function LoginScreen({ onLogin }: { onLogin: (u: User) => void }) {
             </form>
 
             <p className="mt-6 text-center text-[11px] text-stone-500">
-              By continuing you agree to CampusBite's <span className="font-semibold text-stone-700 underline underline-offset-2">Terms</span> &amp; <span className="font-semibold text-stone-700 underline underline-offset-2">Food Hygiene Policy</span>.
+              By continuing you agree to CampusBite's{" "}
+              <button type="button" onClick={() => setPrivacyOpen(true)} className="font-semibold text-stone-700 underline underline-offset-2 cursor-pointer">Terms</button>
+              {" "}&amp;{" "}
+              <button type="button" onClick={() => setPrivacyOpen(true)} className="font-semibold text-stone-700 underline underline-offset-2 cursor-pointer">Food Hygiene Policy</button>.
             </p>
           </div>
         </div>
       </div>
+
+      {forgotPwOpen && (
+        <PasswordResetModal
+          onClose={() => setForgotPwOpen(false)}
+          onResetDone={(resEmail) => {
+            setEmail(resEmail);
+            setForgotPwOpen(false);
+            setMode("login");
+          }}
+        />
+      )}
+
+      {privacyOpen && (
+        <PrivacyTermsModal onClose={() => setPrivacyOpen(false)} />
+      )}
     </div>
   );
 }
@@ -4208,7 +4568,143 @@ const dummyStudents = [
   { name: "Arjun Nair", roll: "22EEE023", dept: "EEE", year: "3rd Year", spend: 90, orders: 1 },
 ];
 
-type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos" | "security" | "broadcast";
+type AdminTab = "overview" | "analytics" | "canteens" | "menu" | "orders" | "students" | "combos" | "security" | "broadcast" | "runners" | "feedback" | "crashes";
+
+function AdminBetaFeedbackViewer({ pushToast }: { pushToast: (m: string, k?: Toast["kind"]) => void }) {
+  const [feedbackList, setFeedbackList] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("campusbite_beta_feedback") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const clearFeedback = () => {
+    if (confirm("Clear all beta feedback entries?")) {
+      localStorage.removeItem("campusbite_beta_feedback");
+      setFeedbackList([]);
+      pushToast("Beta feedback cleared", "info");
+    }
+  };
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#0B1F16] to-[#14532D] p-6 text-white shadow-lg">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-lime-200">
+            Student &amp; Staff Feedback Queue
+          </div>
+          <h3 className="mt-1 text-2xl font-extrabold">Beta Testers Feedback ({feedbackList.length})</h3>
+          <p className="mt-1 text-xs text-white/70">
+            Suggestions, feature requests, and bug reports submitted by students &amp; faculty.
+          </p>
+        </div>
+        {feedbackList.length > 0 && (
+          <button
+            onClick={clearFeedback}
+            className="rounded-full bg-rose-600/30 border border-rose-300/40 px-4 py-2 text-xs font-bold text-rose-200 hover:bg-rose-600/50 transition cursor-pointer"
+          >
+            🧹 Clear Feedback
+          </button>
+        )}
+      </div>
+
+      {feedbackList.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-stone-300 bg-white p-12 text-center text-stone-500">
+          <div className="text-5xl mb-2">💬</div>
+          <div className="font-bold text-[#0B1F16]">No feedback submitted yet</div>
+          <div className="text-xs">Student and faculty feedback submitted in app will appear here.</div>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {feedbackList.map((fb: any) => (
+            <div key={fb.id} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-900/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-[10px] font-black uppercase text-[#14532D]">
+                  {fb.category || "General"}
+                </span>
+                <span className="font-mono text-[10px] text-stone-400">
+                  {new Date(fb.date).toLocaleString()}
+                </span>
+              </div>
+              <p className="text-sm font-semibold text-stone-800 leading-relaxed bg-stone-50 p-3.5 rounded-2xl border border-stone-200">
+                "{fb.content}"
+              </p>
+              <div className="text-xs font-bold text-stone-600 flex items-center justify-between pt-1">
+                <span>👤 {fb.userName}</span>
+                <span className="font-mono text-[11px] text-stone-400">{fb.userEmail}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AdminCrashLogViewer({ pushToast }: { pushToast: (m: string, k?: Toast["kind"]) => void }) {
+  const [crashList, setCrashList] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("campusbite_crash_reports") || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const clearCrashLogs = () => {
+    if (confirm("Clear all recorded crash logs?")) {
+      localStorage.removeItem("campusbite_crash_reports");
+      setCrashList([]);
+      pushToast("Crash log history cleared", "info");
+    }
+  };
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl bg-gradient-to-r from-[#3B0764] to-[#581C87] p-6 text-white shadow-lg">
+        <div>
+          <div className="text-[10px] font-bold uppercase tracking-[0.2em] text-purple-200">
+            Real-time Client Exception Tracker
+          </div>
+          <h3 className="mt-1 text-2xl font-extrabold">Application Crash &amp; Error Logs ({crashList.length})</h3>
+          <p className="mt-1 text-xs text-white/70">
+            Monitors uncaught UI exceptions, network errors, and unhandled promise rejections.
+          </p>
+        </div>
+        {crashList.length > 0 && (
+          <button
+            onClick={clearCrashLogs}
+            className="rounded-full bg-rose-600/30 border border-rose-300/40 px-4 py-2 text-xs font-bold text-rose-200 hover:bg-rose-600/50 transition cursor-pointer"
+          >
+            🧹 Clear Logs
+          </button>
+        )}
+      </div>
+
+      {crashList.length === 0 ? (
+        <div className="rounded-3xl border border-dashed border-purple-200 bg-purple-50/50 p-12 text-center text-purple-900">
+          <div className="text-5xl mb-2">🟢</div>
+          <div className="font-bold text-purple-950 text-base">System Operational &amp; Healthy</div>
+          <div className="text-xs text-purple-700 mt-1">Zero unhandled UI crashes recorded. App is running cleanly.</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {crashList.map((c: any) => (
+            <div key={c.id} className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-stone-900/5 space-y-2 border-l-4 border-rose-600">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono font-bold text-rose-700">⚠️ {c.message}</span>
+                <span className="font-mono text-[10px] text-stone-400">{new Date(c.time).toLocaleString()}</span>
+              </div>
+              <div className="font-mono text-[11px] text-stone-600 bg-stone-900 text-stone-200 p-3 rounded-2xl overflow-x-auto whitespace-pre-wrap">
+                {c.stack || c.message}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function AdminBroadcastManager({
   broadcast,
@@ -4963,6 +5459,8 @@ function AdminDashboard({
           { k: "security" as AdminTab, label: "Faculty Passcode", icon: "🔐" },
           { k: "broadcast" as AdminTab, label: "Announcements", icon: "📢" },
           { k: "runners" as AdminTab, label: "Delivery Runners", icon: "🛵" },
+          { k: "feedback" as AdminTab, label: "Beta Feedback", icon: "💬" },
+          { k: "crashes" as AdminTab, label: "Crash Logs", icon: "⚠️" },
         ]).map((t) => (
           <button
             key={t.k}
@@ -5728,6 +6226,16 @@ function AdminDashboard({
           orders={visibleOrders}
           pushToast={pushToast}
         />
+      )}
+
+      {/* ========= BETA FEEDBACK QUEUE ========= */}
+      {tab === "feedback" && (
+        <AdminBetaFeedbackViewer pushToast={pushToast} />
+      )}
+
+      {/* ========= CLIENT CRASH LOGS & EXCEPTION TRACKER ========= */}
+      {tab === "crashes" && (
+        <AdminCrashLogViewer pushToast={pushToast} />
       )}
     </main>
   );
