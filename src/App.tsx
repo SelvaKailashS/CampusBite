@@ -3121,6 +3121,8 @@ function ProfileMenu({
 }) {
   const [open, setOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [betaFeedbackOpen, setBetaFeedbackOpen] = useState(false);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const initials = user.name ? user.name.split(" ").map((s) => s[0]).slice(0, 2).join("").toUpperCase() : "ST";
   const scopedCanteen = user.role === "admin" && user.canteenId ? canteens.find((c) => c.id === user.canteenId) : null;
   const isSuperAdmin = user.role === "admin" && !user.canteenId;
